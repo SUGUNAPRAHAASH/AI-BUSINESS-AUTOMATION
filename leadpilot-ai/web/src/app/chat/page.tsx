@@ -78,10 +78,11 @@ export default function ChatPage() {
     }
   };
 
-  const quickPrompts = [
-    "How much is teeth whitening and do you do weekend appointments?",
-    "I'm interested in Invisalign, my name is Priya Nair, priya@example.com, start next month, budget 4000.",
-    "Do you treat horses?",
+  const slotOptions = [
+    { label: "📅 Saturday 11:00 AM", value: "I need an appointment on Saturday 11 AM" },
+    { label: "📅 Saturday 1:00 PM", value: "I would like to reserve the Saturday 1:00 PM slot" },
+    { label: "📅 Monday 10:00 AM", value: "Do you have Monday 10:00 AM available?" },
+    { label: "🦷 Teeth Whitening ($299)", value: "How much is teeth whitening and do you have weekend slots?" },
   ];
 
   return (
@@ -157,19 +158,20 @@ export default function ChatPage() {
         )}
       </div>
 
-      {/* Suggested Quick Questions */}
+      {/* Suggested Quick Slot / Prompt Pills */}
       <div className="py-2 flex items-center gap-2 overflow-x-auto text-xs pb-3">
-        <span className="text-slate-500 whitespace-nowrap">Try:</span>
-        {quickPrompts.map((p, idx) => (
+        <span className="text-slate-500 whitespace-nowrap font-medium">Select Slot:</span>
+        {slotOptions.map((opt, idx) => (
           <button
             key={idx}
-            onClick={() => sendMessage(p)}
-            className="px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-teal-500/50 whitespace-nowrap transition-colors"
+            onClick={() => sendMessage(opt.value)}
+            className="px-3.5 py-1.5 rounded-full bg-slate-900/90 border border-teal-500/30 text-teal-300 hover:text-white hover:bg-teal-950 hover:border-teal-400 whitespace-nowrap transition-all shadow-sm font-medium"
           >
-            {p.length > 45 ? p.substring(0, 45) + "..." : p}
+            {opt.label}
           </button>
         ))}
       </div>
+
 
       {/* Input Form */}
       <form

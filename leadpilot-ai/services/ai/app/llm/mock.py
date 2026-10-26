@@ -29,58 +29,107 @@ class MockLLMClient:
     ) -> LLMResult:
         start_time = time.time()
         last_user_msg = ""
+        last_asst_msg = ""
         for m in reversed(messages):
-            if m.get("role") == "user":
-                last_user_msg = m.get("content", "")
-                break
+            if not last_user_msg and m.get("role") == "user":
+                last_user_msg = m.get("content", "").strip()
+            elif not last_asst_msg and m.get("role") == "assistant":
+                last_asst_msg = m.get("content", "").strip()
 
         content = ""
         tool_calls: List[ToolCall] = []
 
-        # 1. Lead extraction and tool calling across current and prior messages
         all_conversation_text = " ".join([m.get("content", "") for m in messages]) + " " + last_user_msg
+        all_conv_lower = all_conversation_text.lower()
+        msg_lower = last_user_msg.lower()
+        asst_lower = last_asst_msg.lower()
 
+        # 1. Contact and entity extraction
         email_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', last_user_msg) or re.search(r'[\w\.-]+@[\w\.-]+\.\w+', all_conversation_text)
-        phone_match = re.search(r'(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}', last_user_msg) or re.search(r'(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}', all_conversation_text)
+        phone_match = re.search(r'(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}|\b\d{10,12}\b', last_user_msg) or re.search(r'(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{4}|\b\d{10,12}\b', all_conversation_text)
         budget_match = re.search(r'(?:budget\s*(?:around|of|is)?\s*[\$]?\s*(\d+[\d,]*))|([\$]\s*\d+[\d,]*)', last_user_msg, re.IGNORECASE)
         timeline_match = re.search(r'(?:start|in|within|next)?\s*(next\s*month|next\s*week|soon|immediately|\d+\s*(?:days|weeks|months))', last_user_msg, re.IGNORECASE)
-        name_match = re.search(r'(?:my\s*(?:full\s*)?name\s*(?:is)?|i\s*am|this\s*is|name[:\s]+)\s*([a-zA-Z\s]+?)(?:,|$|\.|\b(?:my|email|phone|contact)\b)', last_user_msg, re.IGNORECASE)
-        if not name_match:
-            name_match = re.search(r'(?:my\s*(?:full\s*)?name\s*(?:is)?|i\s*am|this\s*is|name[:\s]+)\s*([a-zA-Z\s]+?)(?:,|$|\.|\b(?:my|email|phone|contact)\b)', all_conversation_text, re.IGNORECASE)
 
-        # 2. Check for tool invocation needs
-        msg_lower = last_user_msg.lower()
-        extracted_name = name_match.group(1).strip() if name_match else None
-        if extracted_name:
-            extracted_name = re.sub(r'\b(thank\s*you|thanks|please|pls|and|i\s*need|i\s*want|booking|appointment|here|hello|hi)\b.*$', '', extracted_name, flags=re.IGNORECASE).strip()
-            extracted_name = re.sub(r'[,.!?_\-:]+$', '', extracted_name).strip()
-            words = extracted_name.split()
-            if words and len(extracted_name) >= 2:
-                extracted_name = " ".join([w.capitalize() for w in words])
-            else:
-                extracted_name = None
+        # 2. Robust Name Extraction (prevents infinite question loops)
+        extracted_name = None
+        # Check if assistant previously asked for patient's name
+        asst_asked_for_name = any(q in asst_lower for q in ["full name", "your name", "who am i speaking", "have your name"])
+        
+        # Check standard explicit phrasing first
+        explicit_name_m = re.search(r'(?:my\s*(?:full\s*)?name\s*(?:is)?|i\s*am|this\s*is|name[:\s]+)\s*([a-zA-Z\s]+?)(?:,|$|\.|\b(?:my|email|phone|contact)\b)', last_user_msg, re.IGNORECASE)
+        if explicit_name_m:
+            candidate = explicit_name_m.group(1).strip()
+            candidate = re.sub(r'\b(thank\s*you|thanks|please|pls|and|i\s*need|i\s*want|booking|appointment|here|hello|hi)\b.*$', '', candidate, flags=re.IGNORECASE).strip()
+            if candidate and len(candidate) >= 2:
+                extracted_name = " ".join([w.capitalize() for w in candidate.split()])
 
-        has_appointment = bool(re.search(r'app?o[iy]nt?m?e?nt|schedul|book|slot|reserve', msg_lower)) or bool(re.search(r'app?o[iy]nt?m?e?nt|schedul|book|slot|reserve', all_conversation_text.lower()))
-        has_saturday = bool(re.search(r'sat(ur(day)?)?|weekend', msg_lower)) or bool(re.search(r'sat(ur(day)?)?|weekend', all_conversation_text.lower()))
-        has_whitening = "whiten" in msg_lower or "whiten" in all_conversation_text.lower()
-        has_invisalign = "invisalign" in msg_lower or "brace" in msg_lower or "invisalign" in all_conversation_text.lower()
+        # If assistant asked for name and user gave 1-3 words (e.g. "KARTHIK")
+        if not extracted_name and asst_asked_for_name:
+            # Verify input isn't a date, time, email, or pure phone
+            is_time_reply = bool(re.search(r'\b(\d{1,2}(?::\d{2})?\s*(?:am|pm)?|saturday|sunday|monday|tuesday|wednesday|thursday|friday|tomorrow)\b', msg_lower))
+            if not is_time_reply and not email_match and not phone_match:
+                words = re.findall(r'[a-zA-Z]+', last_user_msg)
+                # Filter conversational filler words
+                valid_words = [w for w in words if w.lower() not in ("hi", "hello", "hey", "yes", "yeah", "ok", "sure", "please", "i", "am", "my", "is")]
+                if 1 <= len(valid_words) <= 3:
+                    extracted_name = " ".join([w.capitalize() for w in valid_words])
+
+        # Scan turn-by-turn: if an assistant message asked for name, the immediate subsequent user message is the name
+        if not extracted_name:
+            for i, m in enumerate(messages):
+                if m.get("role") == "assistant" and any(q in m.get("content", "").lower() for q in ["full name", "your name", "who am i speaking", "have your name"]):
+                    if i + 1 < len(messages) and messages[i + 1].get("role") == "user":
+                        cand_user_msg = messages[i + 1].get("content", "").strip()
+                        if not re.search(r'[\w\.-]+@[\w\.-]+\.\w+', cand_user_msg) and not re.search(r'\b\d{10,12}\b', cand_user_msg):
+                            words = re.findall(r'[a-zA-Z]+', cand_user_msg)
+                            valid_words = [w for w in words if w.lower() not in ("hi", "hello", "hey", "yes", "yeah", "ok", "sure", "please", "i", "am", "my", "is", "saturday", "sunday", "morning", "afternoon", "11", "am", "pm")]
+                            if 1 <= len(valid_words) <= 3:
+                                extracted_name = " ".join([w.capitalize() for w in valid_words])
+                                break
+
+        # Also check prior assistant greeting if assistant already greeted the patient by name
+        if not extracted_name:
+            asst_greeting_m = re.search(r'(?:nice to meet you|hello|hi),?\s+([A-Za-z]+)!', all_conversation_text, re.IGNORECASE)
+            if asst_greeting_m and asst_greeting_m.group(1).lower() not in ("there", "so", "much", "for"):
+                extracted_name = asst_greeting_m.group(1).capitalize()
+
+        # If still not found, search prior conversation messages with standard phrasing
+        if not extracted_name:
+            prior_name_m = re.search(r'(?:my\s*(?:full\s*)?name\s*(?:is)?|i\s*am|this\s*is|name[:\s]+)\s*([a-zA-Z\s]+?)(?:,|$|\.|\b(?:my|email|phone|contact)\b)', all_conversation_text, re.IGNORECASE)
+            if prior_name_m:
+                cand = prior_name_m.group(1).strip()
+                cand = re.sub(r'\b(thank\s*you|thanks|please|pls|and|i\s*need|i\s*want|booking|appointment|here|hello|hi)\b.*$', '', cand, flags=re.IGNORECASE).strip()
+                if cand and len(cand) >= 2:
+                    extracted_name = " ".join([w.capitalize() for w in cand.split()])
+
+        # 3. Analyze intent flags
+        has_appointment = bool(re.search(r'app?o[iy]nt?m?e?nt|schedul|book|slot|reserve', msg_lower)) or bool(re.search(r'app?o[iy]nt?m?e?nt|schedul|book|slot|reserve', all_conv_lower))
+        has_saturday = bool(re.search(r'sat(ur(day)?)?|weekend', msg_lower)) or bool(re.search(r'sat(ur(day)?)?|weekend', all_conv_lower))
+        has_whitening = "whiten" in msg_lower or "whiten" in all_conv_lower
+        has_invisalign = "invisalign" in msg_lower or "brace" in msg_lower or "invisalign" in all_conv_lower
         has_cleaning = "clean" in msg_lower or "checkup" in msg_lower or "exam" in msg_lower
         has_hours = "hour" in msg_lower or "open" in msg_lower or "time" in msg_lower
 
-        patient_name = extracted_name or ("Priya Nair" if "priya" in all_conversation_text.lower() else "Valued Patient")
+        patient_name = extracted_name or ("Priya Nair" if "priya" in all_conv_lower else None)
         contact_email = email_match.group(0) if email_match else None
         contact_phone = phone_match.group(0) if phone_match else None
 
-        if extracted_name or email_match or phone_match:
+        slot_timing = "this Saturday at 11:00 AM" if (has_saturday or "11" in all_conv_lower) else "your requested appointment slot"
+
+        # 4. Strict Funnel Rule: "SELECT A SLOT FIRST THEN NAME THEN MAIL ID AND NUMBER, THEN NUMBER SHOULD TRIGGER"
+        # Only trigger capture_lead when phone number is provided (or if all contact details are complete)
+        should_trigger = bool(contact_phone) or (bool(contact_email) and bool(contact_phone))
+
+        if should_trigger:
             tool_calls.append(ToolCall(
                 name="capture_lead",
                 arguments={
-                    "name": patient_name,
+                    "name": patient_name or "Valued Patient",
                     "email": contact_email,
                     "phone": contact_phone,
                     "interest": "Appointment Booking" if has_appointment else ("Invisalign" if has_invisalign else "Teeth Whitening"),
                     "budget_text": budget_match.group(0) if budget_match else None,
-                    "timeline_text": "Saturday at 11:00 AM" if (has_appointment and has_saturday) else (timeline_match.group(0) if timeline_match else "Upcoming")
+                    "timeline_text": slot_timing
                 }
             ))
 
@@ -90,24 +139,45 @@ class MockLLMClient:
                 arguments={"reason": "Customer inquiry outside human dental practice scope (veterinary/animals)"}
             ))
 
-        # 3. Construct response text
+        # 5. Construct response text following the clean 4-step state machine
         if "horse" in msg_lower or "dog" in msg_lower or "cat" in msg_lower:
             content = "I apologize, but BrightSmile Dental is strictly a human dental practice. We do not treat animals or pets. If you have any inquiries regarding human dental care or would like to speak to our reception staff, I would be pleased to assist."
-        elif (email_match or phone_match) and (has_appointment or "reserv" in all_conversation_text.lower() or "slot" in all_conversation_text.lower()):
+        
+        # STEP 4: Number provided -> NUMBER TRIGGERS AND CONFIRMS!
+        elif contact_phone:
             first_name = patient_name.split()[0].title() if patient_name else "there"
-            contact_summary = []
-            if contact_email:
-                contact_summary.append(contact_email)
-            if contact_phone:
-                contact_summary.append(contact_phone)
-            contact_str = " and ".join(contact_summary) if contact_summary else "your contact info"
-            timing = "this Saturday at 11:00 AM" if has_saturday else "your requested time"
-            content = f"Thank you so much, {first_name}! Your appointment has been officially confirmed for {timing} with Dr. Sarah Mitchell at BrightSmile Dental. We have dispatched a confirmation and calendar invitation to {contact_str}. Our clinical team looks forward to welcoming you!"
-        elif extracted_name and not (email_match or phone_match):
-            first_name = extracted_name.split()[0].title()
-            content = f"Thank you, {first_name}! I have noted your details and reserved your appointment slot at BrightSmile Dental. Could you also share your phone number or email address so our reception team can send you the confirmation and calendar invite?"
-        elif has_appointment and (has_saturday or "11" in msg_lower or "morning" in msg_lower):
+            email_info = f"to {contact_email}" if contact_email else "to your email on file"
+            content = (
+                f"Thank you so much, {first_name}! 🎉 Your appointment has been officially confirmed for {slot_timing} "
+                f"with Dr. Sarah Mitchell at BrightSmile Dental. We have dispatched a confirmation receipt {email_info}, "
+                f"and an SMS reminder will be sent to {contact_phone}. Our clinical team looks forward to welcoming you!"
+            )
+        
+        # STEP 3: Slot + Name + Email provided -> Ask for Phone Number
+        elif patient_name and contact_email and not contact_phone:
+            first_name = patient_name.split()[0].title()
+            content = (
+                f"Thank you, {first_name}! We have recorded your email ({contact_email}). "
+                f"Lastly, could you please share your mobile phone number so our reception desk can text your reminder "
+                f"and clinic arrival instructions?"
+            )
+        
+        # STEP 2: Slot + Name provided (e.g. user just said "KARTHIK") -> Ask for Email
+        elif patient_name and not contact_email and not contact_phone:
+            first_name = patient_name.split()[0].title()
+            content = (
+                f"Nice to meet you, {first_name}! We have reserved your {slot_timing} slot. "
+                f"Could you please share your email address so we can send your appointment confirmation and calendar invite?"
+            )
+        
+        # User specified / re-specified a time slot (e.g. "11 AM" or "Saturday 11 AM")
+        elif ("11" in msg_lower or "saturday" in msg_lower or "slot" in msg_lower) and not patient_name:
+            content = "We have reserved our Saturday 11:00 AM operatory slot for you! To proceed with your reservation, could I please have your full name?"
+        
+        # STEP 1: General appointment inquiry -> Ask for Name
+        elif has_appointment and not patient_name:
             content = "We are open on Saturdays from 9:00 AM to 2:00 PM, and our 11:00 AM operatory slot is available! To reserve this appointment for you, could I please have your full name?"
+        
         elif has_whitening:
             content = "Professional in-office teeth whitening at BrightSmile Dental is $299 for a 1-hour laser treatment. We also offer take-home kits for $199, and 0% financing over 3 months. Would you like to schedule an appointment or check available times?"
         elif has_invisalign:
@@ -116,8 +186,6 @@ class MockLLMClient:
             content = "A regular dental exam, hygiene checkup, and standard cleaning at BrightSmile Dental is $120. We have slots open during weekdays and Saturday mornings. What day works best for you?"
         elif has_hours or has_saturday:
             content = "BrightSmile Dental is open Monday through Friday from 8:00 AM to 7:00 PM, and Saturdays from 9:00 AM to 2:00 PM for appointments and emergency care. We are closed on Sundays."
-        elif has_appointment:
-            content = "I would be happy to help you book an appointment! We are open Monday to Friday 8:00 AM - 7:00 PM and Saturday 9:00 AM - 2:00 PM. What day and preferred time work best for you?"
         elif json_schema:
             content = json.dumps({
                 "category": "support",
@@ -141,6 +209,7 @@ class MockLLMClient:
             model="mock-gemini-2.5",
             provider="mock"
         )
+
 
     async def embed(self, texts: List[str]) -> List[List[float]]:
         """

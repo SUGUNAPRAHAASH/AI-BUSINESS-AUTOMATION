@@ -167,14 +167,22 @@ async def agent_node(state: AgentState) -> Dict[str, Any]:
         elif tc.name == "check_availability":
             await check_availability(tc.arguments.get("date", "2026-11-01"))
 
-    # Automatic lead capture if contact info or name is provided in user input
+    # Automatic lead capture triggered when phone number is provided ("THEN NUMBER SHOULD TRIGGER")
     import re
     full_text = (state.get("current_input", "") + " " + result.content).lower()
     email_m = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', state.get("current_input", ""))
-    phone_m = re.search(r'(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}', state.get("current_input", ""))
+    phone_m = re.search(r'(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}|\b\d{10,12}\b', state.get("current_input", ""))
     name_m = re.search(r'(?:my\s*(?:full\s*)?name\s*(?:is)?|i\s*am|this\s*is|name[:\s]+)\s*([a-zA-Z\s]+?)(?:,|$|\.|\b(?:my|email|phone|contact)\b)', state.get("current_input", ""), re.IGNORECASE)
 
-    # If name wasn't in the current message, check prior user messages
+    # Check prior messages for email and name if not in current message
+    if not email_m:
+        for m in reversed(state.get("messages", [])):
+            if m.get("role") == "user":
+                em = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', m.get("content", ""))
+                if em:
+                    email_m = em
+                    break
+
     if not name_m:
         for m in reversed(state.get("messages", [])):
             if m.get("role") == "user":
@@ -183,18 +191,19 @@ async def agent_node(state: AgentState) -> Dict[str, Any]:
                     name_m = prior_name_m
                     break
 
-    if (email_m or phone_m or name_m) and not lead_captured:
-        budget_m = re.search(r'(?:budget\s*(?:around|of|is)?\s*[\$]?\s*(\d+[\d,]*))|([\$]\s*\d+[\d,]*)', state.get("current_input", ""), re.IGNORECASE)
-        timeline_m = re.search(r'(?:start|in|within|next)?\s*(next\s*month|next\s*week|soon|immediately|\d+\s*(?:days|weeks|months)|saturday|tomorrow)', state.get("current_input", ""), re.IGNORECASE)
+    # Strictly trigger when phone number is provided
+    if phone_m and not lead_captured:
+        budget_m = re.search(r'(?:budget\s*(?:around|of|is)?\s*[\$]?\s*(\d+[\d,]*))|([\$]\s*\d+[\d,]*)', full_text, re.IGNORECASE)
+        timeline_m = re.search(r'(?:start|in|within|next)?\s*(next\s*month|next\s*week|soon|immediately|\d+\s*(?:days|weeks|months)|saturday|tomorrow)', full_text, re.IGNORECASE)
         lead_captured = await capture_lead(
             tenant_id=tenant_id,
             conversation_id=cid,
-            name=name_m.group(1).strip() if name_m else None,
+            name=name_m.group(1).strip() if name_m else "Valued Patient",
             email=email_m.group(0) if email_m else None,
-            phone=phone_m.group(0) if phone_m else None,
+            phone=phone_m.group(0),
             interest="Teeth Whitening" if "whiten" in full_text else ("Invisalign" if "invisalign" in full_text else "General Appointment"),
             budget_text=budget_m.group(0) if budget_m else None,
-            timeline_text=timeline_m.group(0) if timeline_m else ("Saturday" if "sat" in full_text else "Upcoming")
+            timeline_text=timeline_m.group(0) if timeline_m else ("Saturday at 11:00 AM" if "sat" in full_text else "Upcoming")
         )
 
     # Also handle off-topic inquiries (e.g. horses)

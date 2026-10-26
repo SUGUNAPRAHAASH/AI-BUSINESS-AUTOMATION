@@ -30,6 +30,15 @@ async def lifespan(app: FastAPI):
     kb_dir = Path(__file__).resolve().parent.parent.parent.parent / "knowledge_base"
     if kb_dir.exists():
         await ingest_knowledge_base_directory(str(kb_dir))
+
+    # Auto-sync existing leads from Airtable so Render redeployments retain all leads
+    try:
+        from app.integrations.airtable import AirtableAdapter
+        airtable = AirtableAdapter()
+        await airtable.sync_to_sqlite()
+    except Exception as e:
+        logger.warning(f"Startup Airtable sync warning: {e}")
+
     logger.info("LeadPilot AI Service startup complete.")
     yield
     logger.info("LeadPilot AI Service shutting down.")

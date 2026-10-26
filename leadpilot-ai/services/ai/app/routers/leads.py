@@ -39,6 +39,27 @@ async def list_leads(
             "SELECT * FROM leads ORDER BY created_at DESC LIMIT ?",
             (limit,)
         )
+
+    # If local SQLite has no leads (e.g. fresh Render deployment), automatically sync from Airtable
+    if len(rows) == 0:
+        try:
+            from app.integrations.airtable import AirtableAdapter
+            airtable = AirtableAdapter()
+            await airtable.sync_to_sqlite()
+            if score:
+                rows = await fetch_all(
+                    "SELECT * FROM leads WHERE score = ? ORDER BY created_at DESC LIMIT ?",
+                    (score, limit)
+                )
+            else:
+                rows = await fetch_all(
+                    "SELECT * FROM leads ORDER BY created_at DESC LIMIT ?",
+                    (limit,)
+                )
+        except Exception as e:
+            from app.utils.logging import logger
+            logger.warning(f"Failed to auto-sync leads from Airtable: {e}")
+
     leads = [LeadResponse(**r) for r in rows]
     return LeadListResponse(leads=leads, total=len(leads))
 
