@@ -36,6 +36,7 @@ class ChatRequest(BaseModel):
     tenant: str = "brightsmile"
     channel: str = "web"
     external_id: Optional[str] = None
+    conversation_id: Optional[str] = None
     message: str
 
 
@@ -81,7 +82,7 @@ class LeadResponse(BaseModel):
     score: str = Field(..., pattern="^(hot|warm|cold)$")
     score_reason: str = Field(..., max_length=200)
     summary: str = Field(..., max_length=300)
-    next_best_action: str
+    next_best_action: Optional[str] = "Follow up with patient"
     crm_id: Optional[str] = None
     crm_synced_at: Optional[str] = None
     status: str = "new"

@@ -20,7 +20,8 @@ async def chat_endpoint(req: ChatRequest):
         tenant_id=tenant_id,
         message=req.message,
         channel=req.channel,
-        external_id=req.external_id
+        external_id=req.external_id,
+        conversation_id=req.conversation_id
     )
     return ChatResponse(
         answer=res["answer"],

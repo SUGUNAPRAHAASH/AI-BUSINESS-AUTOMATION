@@ -42,31 +42,30 @@ class MockLLMClient:
         phone_match = re.search(r'(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}', last_user_msg)
         budget_match = re.search(r'(?:budget\s*(?:around|of|is)?\s*[\$]?\s*(\d+[\d,]*))|([\$]\s*\d+[\d,]*)', last_user_msg, re.IGNORECASE)
         timeline_match = re.search(r'(?:start|in|within|next)?\s*(next\s*month|next\s*week|soon|immediately|\d+\s*(?:days|weeks|months))', last_user_msg, re.IGNORECASE)
-        name_match = re.search(r'(?:my name is|i am|name[:\s]+)([a-zA-Z\s]+?)(?:,|$|\.|\b(?:my|email|phone)\b)', last_user_msg, re.IGNORECASE)
+        name_match = re.search(r'(?:my\s*(?:full\s*)?name\s*(?:is)?|i\s*am|this\s*is|name[:\s]+)\s*([a-zA-Z\s]+?)(?:,|$|\.|\b(?:my|email|phone)\b)', last_user_msg, re.IGNORECASE)
 
         # 2. Check for tool invocation needs
         msg_lower = last_user_msg.lower()
-        if "invisalign" in msg_lower or "teeth whitening" in msg_lower or "cleaning" in msg_lower or "how much" in msg_lower or "weekend" in msg_lower or "hours" in msg_lower or "horses" in msg_lower:
-            if "priya" in msg_lower or email_match or "interested" in msg_lower:
-                # Capture lead tool call
-                extracted_name = name_match.group(1).strip() if name_match else ("Priya Nair" if "priya" in msg_lower else None)
-                tool_calls.append(ToolCall(
-                    name="capture_lead",
-                    arguments={
-                        "name": extracted_name,
-                        "email": email_match.group(0) if email_match else "priya@example.com",
-                        "phone": phone_match.group(0) if phone_match else None,
-                        "interest": "Invisalign" if "invisalign" in msg_lower else "Teeth Whitening",
-                        "budget_text": budget_match.group(0) if budget_match else "4000",
-                        "timeline_text": timeline_match.group(0) if timeline_match else "next month"
-                    }
-                ))
-            else:
-                # Search knowledge base tool call
-                tool_calls.append(ToolCall(
-                    name="search_knowledge_base",
-                    arguments={"query": last_user_msg, "k": 5}
-                ))
+        extracted_name = name_match.group(1).strip() if name_match else None
+        has_appointment = bool(re.search(r'app?o[iy]nt?m?e?nt|schedul|book|slot|reserve', msg_lower))
+        has_saturday = bool(re.search(r'sat(ur(day)?)?|weekend', msg_lower))
+        has_whitening = "whiten" in msg_lower
+        has_invisalign = "invisalign" in msg_lower or "brace" in msg_lower
+        has_cleaning = "clean" in msg_lower or "checkup" in msg_lower or "exam" in msg_lower
+        has_hours = "hour" in msg_lower or "open" in msg_lower or "time" in msg_lower
+
+        if extracted_name or email_match or phone_match:
+            tool_calls.append(ToolCall(
+                name="capture_lead",
+                arguments={
+                    "name": extracted_name or ("Priya Nair" if "priya" in msg_lower else "Prospective Patient"),
+                    "email": email_match.group(0) if email_match else "patient@example.com",
+                    "phone": phone_match.group(0) if phone_match else None,
+                    "interest": "Appointment Booking" if has_appointment else ("Invisalign" if has_invisalign else "Teeth Whitening"),
+                    "budget_text": budget_match.group(0) if budget_match else None,
+                    "timeline_text": timeline_match.group(0) if timeline_match else "Upcoming"
+                }
+            ))
 
         if "horse" in msg_lower or "dog" in msg_lower or "cat" in msg_lower:
             tool_calls.append(ToolCall(
@@ -75,12 +74,23 @@ class MockLLMClient:
             ))
 
         # 3. Construct response text
-        if "horse" in msg_lower or "treat horses" in msg_lower:
-            content = "I apologize, but BrightSmile Dental is strictly a human dental clinic. We do not treat horses or any other animals. If you have any questions regarding human dental health, or would like to speak to our staff, I would be happy to connect you with our team."
-        elif "teeth whitening" in msg_lower and "weekend" in msg_lower:
-            content = "Professional in-office teeth whitening at BrightSmile Dental is $299 for a 1-hour laser whitening treatment. We are open for weekend appointments on Saturdays from 9:00 to 14:00 [Source: pricing.md] [Source: opening_hours.md]. Would you like me to check available slots for Saturday?"
-        elif "priya" in msg_lower or ("invisalign" in msg_lower and email_match):
-            content = "Thank you Priya! I've recorded your interest in Invisalign with your budget of around $4,000 for next month. A dedicated treatment coordinator from BrightSmile Dental will review your request and contact you at priya@example.com to arrange your complimentary 3D consultation scan."
+        if "horse" in msg_lower or "dog" in msg_lower or "cat" in msg_lower:
+            content = "I apologize, but BrightSmile Dental is strictly a human dental clinic. We do not treat animals or pets. If you have any questions regarding human dental health, or would like to speak to our staff, I would be happy to connect you with our team."
+        elif extracted_name:
+            first_name = extracted_name.split()[0].title()
+            content = f"Thank you, {first_name}! I have noted your details and reserved your appointment slot at BrightSmile Dental. Could you also share your phone number or email address so our reception team can send you the confirmation and calendar invite?"
+        elif has_appointment and (has_saturday or "11" in msg_lower or "morning" in msg_lower):
+            content = "We are open on Saturdays from 9:00 AM to 2:00 PM (14:00) [Source: opening_hours.md], so an 11:00 AM slot is available! To reserve this appointment for you, could I please start with your full name?"
+        elif has_whitening:
+            content = "Professional in-office teeth whitening at BrightSmile Dental is $299 for a 1-hour laser treatment [Source: pricing.md]. We also offer take-home kits for $199, and 0% financing over 3 months. Would you like to schedule an appointment or check available times?"
+        elif has_invisalign:
+            content = "BrightSmile Dental is a Premier Invisalign Provider! Treatment costs typically range between $3,500 and $5,500 depending on alignment complexity [Source: pricing.md]. We offer complimentary 3D digital scans. Would you like to book a consultation?"
+        elif has_cleaning:
+            content = "A regular dental exam, hygiene checkup, and standard cleaning at BrightSmile Dental is $120 [Source: pricing.md]. We have slots open during weekdays and Saturday mornings. What day works best for you?"
+        elif has_hours or has_saturday:
+            content = "BrightSmile Dental is open Monday through Friday from 8:00 AM to 7:00 PM, and Saturdays from 9:00 AM to 2:00 PM for appointments and emergency care [Source: opening_hours.md]. We are closed on Sundays."
+        elif has_appointment:
+            content = "I would be happy to help you book an appointment! We are open Monday to Friday 8:00 AM - 7:00 PM and Saturday 9:00 AM - 2:00 PM [Source: opening_hours.md]. What day and preferred time work best for you?"
         elif json_schema:
             content = json.dumps({
                 "category": "support",
@@ -92,7 +102,7 @@ class MockLLMClient:
                 "action": "needs_approval"
             })
         else:
-            content = f"Thank you for contacting BrightSmile Dental. Regarding your question: our team is pleased to assist with our full range of dental treatments and appointments. Please let us know how we can best support your smile!"
+            content = "Hello and welcome to BrightSmile Dental! We provide general dental care, teeth whitening ($299), Invisalign, crowns, and Saturday emergency appointments [Source: services.md]. How can we assist with your smile today?"
 
         latency_ms = int((time.time() - start_time) * 1000)
         return LLMResult(

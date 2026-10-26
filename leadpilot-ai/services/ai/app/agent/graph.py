@@ -72,18 +72,24 @@ async def guardrails_node(state: AgentState) -> Dict[str, Any]:
 
 
 async def route_node(state: AgentState) -> Dict[str, Any]:
-    """Node 3: Classify user intent."""
+    """Node 3: Classify user intent with typo-tolerance."""
     if state.get("final_answer"):
         return {"intent": "blocked"}
 
+    import re
     text = state.get("current_input", "").lower()
-    if any(k in text for k in ["book", "appointment", "schedule", "slot", "available"]):
+    has_name = bool(re.search(r'(?:my\s*(?:full\s*)?name\s*(?:is)?|i\s*am|this\s*is|name[:\s]+)\s*[a-zA-Z\s]+', text))
+    has_appointment_typo = bool(re.search(r'app?o[iy]nt?m?e?nt|schedul|book|slot|reserv|timing', text))
+
+    if has_name:
         intent = "appointment"
-    elif any(k in text for k in ["invisalign", "implant", "whitening", "veneer", "interested", "cost", "budget"]):
+    elif has_appointment_typo:
+        intent = "appointment"
+    elif any(k in text for k in ["invisalign", "implant", "whiten", "veneer", "interested", "cost", "budget"]):
         intent = "lead_interest"
     elif any(k in text for k in ["complain", "unhappy", "pain", "bleeding", "emergency", "lawyer", "refund"]):
         intent = "complaint"
-    elif any(k in text for k in ["hours", "open", "saturday", "weekend", "price", "insurance", "parking", "faq", "do you", "how much"]):
+    elif any(k in text for k in ["hour", "open", "sat", "weekend", "price", "insurance", "parking", "faq", "do you", "how much", "clean"]):
         intent = "faq"
     elif any(k in text for k in ["hi", "hello", "hey", "good morning", "thanks", "thank you"]):
         intent = "smalltalk"
@@ -101,6 +107,11 @@ async def retrieve_node(state: AgentState) -> Dict[str, Any]:
     intent = state.get("intent")
     query = state.get("current_input", "")
     tenant_id = state.get("tenant_id")
+
+    # If query is just a name, search opening hours and appointments instead of the person's name
+    import re
+    if re.search(r'(?:my\s*(?:full\s*)?name\s*(?:is)?|i\s*am|this\s*is|name[:\s]+)\s*[a-zA-Z\s]+', query.lower()):
+        query = "saturday opening hours appointment booking"
 
     # Inquire retriever if relevant
     if intent in ("faq", "appointment", "lead_interest"):

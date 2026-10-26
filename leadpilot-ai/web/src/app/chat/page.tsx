@@ -20,6 +20,7 @@ export default function ChatPage() {
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
 
   const sendMessage = async (textToSend?: string) => {
     const text = textToSend || input;
@@ -38,11 +39,15 @@ export default function ChatPage() {
           message: text,
           channel: "web",
           tenant: "brightsmile",
+          conversation_id: conversationId,
         }),
       });
 
       if (res.ok) {
         const data = await res.json();
+        if (data.conversation_id && !conversationId) {
+          setConversationId(data.conversation_id);
+        }
         const asstMsg: Message = {
           role: "assistant",
           content: data.answer,

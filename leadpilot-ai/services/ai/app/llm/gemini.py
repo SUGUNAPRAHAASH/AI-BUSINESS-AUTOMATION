@@ -31,7 +31,10 @@ class GeminiClient:
             return await self.mock.generate(system, messages, json_schema=json_schema, tools=tools, temperature=temperature)
 
         start_time = time.time()
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.api_key}"
+        candidate_models = [self.model]
+        for alt in ["gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.5-flash-lite"]:
+            if alt not in candidate_models:
+                candidate_models.append(alt)
 
         contents = []
         for msg in messages:
@@ -52,32 +55,40 @@ class GeminiClient:
             payload["generationConfig"]["responseMimeType"] = "application/json"
             payload["generationConfig"]["responseSchema"] = json_schema
 
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                res = await client.post(url, json=payload)
-                if res.status_code == 200:
-                    data = res.json()
-                    candidates = data.get("candidates", [])
-                    content = ""
-                    if candidates:
-                        parts = candidates[0].get("content", {}).get("parts", [])
-                        content = "".join([p.get("text", "") for p in parts])
-                    usage = data.get("usageMetadata", {})
-                    latency = int((time.time() - start_time) * 1000)
-                    return LLMResult(
-                        content=content,
-                        prompt_tokens=usage.get("promptTokenCount", 0),
-                        completion_tokens=usage.get("candidatesTokenCount", 0),
-                        latency_ms=latency,
-                        model=self.model,
-                        provider="gemini"
-                    )
-                else:
-                    logger.warning(f"Gemini API returned {res.status_code}: {res.text}. Falling back to mock.")
-                    return await self.mock.generate(system, messages, json_schema=json_schema, tools=tools, temperature=temperature)
-        except Exception as e:
-            logger.error(f"Error calling Gemini API: {e}. Falling back to mock.")
-            return await self.mock.generate(system, messages, json_schema=json_schema, tools=tools, temperature=temperature)
+        async with httpx.AsyncClient(timeout=25.0) as client:
+            for model_name in candidate_models:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={self.api_key}"
+                try:
+                    res = await client.post(url, json=payload)
+                    if res.status_code == 200:
+                        data = res.json()
+                        candidates = data.get("candidates", [])
+                        content = ""
+                        if candidates:
+                            parts = candidates[0].get("content", {}).get("parts", [])
+                            content = "".join([p.get("text", "") for p in parts])
+                        usage = data.get("usageMetadata", {})
+                        latency = int((time.time() - start_time) * 1000)
+                        return LLMResult(
+                            content=content,
+                            prompt_tokens=usage.get("promptTokenCount", 0),
+                            completion_tokens=usage.get("candidatesTokenCount", 0),
+                            latency_ms=latency,
+                            model=model_name,
+                            provider="gemini"
+                        )
+                    elif res.status_code in (429, 503, 404):
+                        logger.warning(f"Gemini model '{model_name}' returned {res.status_code}. Trying next candidate model...")
+                        continue
+                    else:
+                        logger.warning(f"Gemini API returned {res.status_code}: {res.text}. Trying next candidate model...")
+                        continue
+                except Exception as e:
+                    logger.warning(f"Error calling Gemini model '{model_name}': {e}. Trying next candidate...")
+                    continue
+
+        logger.error("All Gemini candidate models failed or unavailable. Falling back to intelligent mock.")
+        return await self.mock.generate(system, messages, json_schema=json_schema, tools=tools, temperature=temperature)
 
     async def embed(self, texts: List[str]) -> List[List[float]]:
         if not self.api_key or settings.GEMINI_MODE == "mock":
