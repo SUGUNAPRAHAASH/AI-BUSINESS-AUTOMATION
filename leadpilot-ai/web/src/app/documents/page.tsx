@@ -51,6 +51,25 @@ export default function DocumentsPage() {
     }
   }
 
+  function loadDemoInvoice() {
+    setExtractedResult({
+      vendor_name: "Henry Schein Dental Supply",
+      invoice_number: "HS-DENT-88412",
+      invoice_date: "2026-10-25",
+      subtotal: 1240.00,
+      tax: 105.40,
+      total: 1345.40,
+      confidence: 0.98,
+      validation_errors: [],
+      line_items: [
+        { description: "Opalescence 35% Teeth Whitening Gel Syringes (Pk/4)", quantity: 5, unit_price: 68.00, amount: 340.00 },
+        { description: "Nitrile Examination Gloves - Powder Free Medium (Box/100)", quantity: 10, unit_price: 22.00, amount: 220.00 },
+        { description: "Septodont Septocaine Articaine Dental Anesthetic (50/Pk)", quantity: 4, unit_price: 85.00, amount: 340.00 },
+        { description: "3M Filtek Supreme Ultra Universal Composite Syringe", quantity: 5, unit_price: 68.00, amount: 340.00 }
+      ]
+    });
+  }
+
   return (
     <div className="p-8 max-w-7xl mx-auto w-full space-y-8">
       {/* Header */}
@@ -58,10 +77,10 @@ export default function DocumentsPage() {
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
             <FileText className="h-6 w-6 text-teal-400" />
-            Document Extraction & Invoice Audit
+            Dental Supply Invoice & Form OCR
           </h1>
           <p className="text-sm text-slate-400 mt-1">
-            Optical & PDF structured data extraction with automated mathematical consistency verification
+            Automated clinical supplier bill audit: extracts line items, verifies pricing maths, and flags supplier overcharges
           </p>
         </div>
         <button
@@ -77,20 +96,29 @@ export default function DocumentsPage() {
         <div className="p-4 rounded-full bg-teal-500/10 text-teal-400 mb-3">
           <Upload className="h-8 w-8" />
         </div>
-        <h3 className="text-base font-semibold text-white">Upload Supplier Invoice or Form</h3>
+        <h3 className="text-base font-semibold text-white">Upload Supplier Invoice or Lab Form</h3>
         <p className="text-xs text-slate-400 mt-1 max-w-md">
-          Supports PDF, PNG, JPG. Automatically parses line items, calculates tax, verifies subtotal maths, and syncs to accounting sheets.
+          Audits Henry Schein, Benco, or Patterson Dental invoices. Automatically parses dental products, verifies tax calculations, and logs supplies.
         </p>
-        <label className="mt-4 px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-medium text-xs cursor-pointer shadow-md shadow-teal-600/20 transition-all">
-          <span>{uploading ? "Extracting..." : "Select Invoice File"}</span>
-          <input
-            type="file"
-            onChange={handleFileUpload}
-            disabled={uploading}
-            className="hidden"
-            accept=".pdf,.png,.jpg,.jpeg,.txt"
-          />
-        </label>
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+          <label className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-medium text-xs cursor-pointer shadow-md shadow-teal-600/20 transition-all">
+            <span>{uploading ? "Extracting..." : "Upload Invoice File"}</span>
+            <input
+              type="file"
+              onChange={handleFileUpload}
+              disabled={uploading}
+              className="hidden"
+              accept=".pdf,.png,.jpg,.jpeg,.txt"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={loadDemoInvoice}
+            className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-teal-300 font-medium text-xs transition-all border border-slate-700 flex items-center gap-1.5 shadow-sm"
+          >
+            <span>⚡ 1-Click Demo: Henry Schein Dental Supply</span>
+          </button>
+        </div>
       </div>
 
       {/* Extraction Result Showcase */}

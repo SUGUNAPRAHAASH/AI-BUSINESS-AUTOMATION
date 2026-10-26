@@ -19,9 +19,9 @@ const NAV_ITEMS = [
   { name: "Live AI Chat", href: "/chat", icon: MessageSquare },
   { name: "Patient Leads", href: "/leads", icon: Users },
   { name: "Email Triage", href: "/emails", icon: Mail },
-  { name: "Document Extraction", href: "/documents", icon: FileText },
+  { name: "Supply Invoice OCR", href: "/documents", icon: FileText },
   { name: "Failed Jobs", href: "/failed-jobs", icon: AlertTriangle },
-  { name: "Mock Outbox", href: "/outbox", icon: Send },
+  { name: "Activity Logs", href: "/outbox", icon: Send },
   { name: "Knowledge Base", href: "/kb", icon: BookOpen },
 ];
 

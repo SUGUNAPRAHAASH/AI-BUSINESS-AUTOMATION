@@ -130,7 +130,7 @@ async def capture_lead(
     try:
         from app.integrations.hubspot import HubSpotAdapter
         hubspot = HubSpotAdapter()
-        await hubspot.upsert_contact(
+        hs_res = await hubspot.upsert_contact(
             email=email or f"lead_{uuid.uuid4().hex[:6]}@patient.brightsmiledental.com",
             name=name,
             phone=phone,
@@ -138,6 +138,10 @@ async def capture_lead(
             source="leadpilot_chat",
             summary=summary
         )
+        if hs_res and hs_res.get("crm_id"):
+            crm_id = str(hs_res["crm_id"])
+            result["crm_id"] = crm_id
+            await execute("UPDATE leads SET crm_id = ? WHERE id = ?", (crm_id, lead_id))
     except Exception as e:
         logger.error(f"HubSpot dispatch error: {e}")
 

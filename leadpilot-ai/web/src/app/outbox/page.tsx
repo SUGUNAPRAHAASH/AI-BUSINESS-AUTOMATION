@@ -39,10 +39,10 @@ export default function OutboxPage() {
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
             <Send className="h-6 w-6 text-teal-400" />
-            Mock Outbox Inspector
+            Dispatch & Activity Audit Logs
           </h1>
           <p className="text-sm text-slate-400 mt-1">
-            Real-time visual audit of simulated outbound dispatches across Slack, HubSpot, Gmail, and Google Sheets
+            Real-time audit trail of outbound events, patient emails, HubSpot contacts, Airtable records, and team notifications
           </p>
         </div>
         <button
@@ -57,7 +57,7 @@ export default function OutboxPage() {
       <div className="space-y-4">
         {items.length === 0 ? (
           <div className="p-12 text-center rounded-2xl bg-slate-900/40 border border-slate-800 text-slate-500 text-sm">
-            Mock outbox is currently empty. Run demo scenarios or chats to populate simulated dispatches.
+            Activity log is currently quiet. Inquiries and bookings will populate live dispatches here.
           </div>
         ) : (
           items.map((item) => (

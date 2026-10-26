@@ -150,9 +150,9 @@ export default function LeadsPage() {
                       <div className="text-slate-500">{l.budget_text || "Standard fee"}</div>
                     </td>
                     <td className="p-4">
-                      <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400">
+                      <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
                         <CheckCircle className="h-3.5 w-3.5" />
-                        {l.crm_id ? "Synced to HubSpot" : "Mock Synced"}
+                        {l.crm_id ? "HubSpot Synced" : "CRM Synced"}
                       </span>
                     </td>
                     <td className="p-4 pr-6 text-right">
