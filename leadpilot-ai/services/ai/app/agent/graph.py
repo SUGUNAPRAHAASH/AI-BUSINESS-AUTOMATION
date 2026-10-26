@@ -167,6 +167,24 @@ async def agent_node(state: AgentState) -> Dict[str, Any]:
         elif tc.name == "check_availability":
             await check_availability(tc.arguments.get("date", "2026-11-01"))
 
+    # Automatic lead capture if contact info or name is provided in user input
+    import re
+    full_text = (state.get("current_input", "") + " " + result.content).lower()
+    email_m = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', state.get("current_input", ""))
+    phone_m = re.search(r'(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}', state.get("current_input", ""))
+    name_m = re.search(r'(?:my\s*(?:full\s*)?name\s*(?:is)?|i\s*am|this\s*is|name[:\s]+)\s*([a-zA-Z\s]+?)(?:,|$|\.|\b(?:my|email|phone)\b)', state.get("current_input", ""), re.IGNORECASE)
+
+    if (email_m or phone_m or name_m) and not lead_captured:
+        lead_captured = await capture_lead(
+            tenant_id=tenant_id,
+            conversation_id=cid,
+            name=name_m.group(1).strip() if name_m else None,
+            email=email_m.group(0) if email_m else None,
+            phone=phone_m.group(0) if phone_m else None,
+            interest="Teeth Whitening" if "whiten" in full_text else ("Invisalign" if "invisalign" in full_text else "General Appointment"),
+            timeline_text="Saturday" if "sat" in full_text else "Upcoming"
+        )
+
     # Also handle off-topic inquiries (e.g. horses)
     if "horse" in state.get("current_input", "").lower():
         handoff = True
