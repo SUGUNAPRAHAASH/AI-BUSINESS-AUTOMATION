@@ -5,6 +5,8 @@
 *.env.*.local
 **/.env
 **/.env.*
+pass.txt
+*pass*.txt
 
 # Python
 __pycache__/

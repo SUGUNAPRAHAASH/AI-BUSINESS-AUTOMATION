@@ -96,6 +96,29 @@ async def capture_lead(
         f"📝 *Summary:* {summary[:200]}"
     )
 
+    # Dispatch real Slack alert
+    from app.integrations.slack import SlackAdapter
+    slack = SlackAdapter()
+    await slack.send_message(
+        text=f"🚨 New Patient Lead: {name or 'Visitor'} ({score.upper()})",
+        blocks=[
+            {
+                "type": "header",
+                "text": {"type": "plain_text", "text": "🚨 New Patient Lead Captured"}
+            },
+            {
+                "type": "section",
+                "fields": [
+                    {"type": "mrkdwn", "text": f"*Name:* {name or 'Visitor'}"},
+                    {"type": "mrkdwn", "text": f"*Score:* {score.upper()}"},
+                    {"type": "mrkdwn", "text": f"*Email:* {email or 'N/A'}"},
+                    {"type": "mrkdwn", "text": f"*Phone:* {phone or 'N/A'}"},
+                    {"type": "mrkdwn", "text": f"*Interest:* {interest or 'General'}"},
+                    {"type": "mrkdwn", "text": f"*Timeline:* {timeline_text or 'Soon'}"}
+                ]
+            }
+        ]
+    )
     if score == "hot":
         await insert_mock_outbox("slack", "hot_lead_alert", {
             "channel": "#sales-leads",
@@ -135,6 +158,21 @@ async def request_human_handoff(tenant_id: str, conversation_id: str, reason: st
         f"⚠️ *HUMAN STAFF HANDOFF REQUESTED!*\n\n"
         f"📋 *Reason:* {reason}\n"
         f"💬 *Conversation ID:* `{conversation_id}`"
+    )
+    from app.integrations.slack import SlackAdapter
+    slack = SlackAdapter()
+    await slack.send_message(
+        text=f"⚠️ Human Staff Handoff: {reason}",
+        blocks=[
+            {
+                "type": "header",
+                "text": {"type": "plain_text", "text": "⚠️ Front-Desk Human Handoff Needed"}
+            },
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"*Reason:* {reason}\n*Conversation ID:* `{conversation_id}`"}
+            }
+        ]
     )
     await insert_mock_outbox("slack", "human_handoff_alert", {
         "channel": "#front-desk-alerts",
