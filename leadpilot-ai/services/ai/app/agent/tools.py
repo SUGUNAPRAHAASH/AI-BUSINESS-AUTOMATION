@@ -83,7 +83,19 @@ async def capture_lead(
         "next_best_action": next_action
     }
 
-    # If lead is hot, log mock outbox alert for sales team
+    # If lead is captured, send alerts
+    from app.integrations.telegram import TelegramAdapter
+    telegram = TelegramAdapter()
+    await telegram.send_message(
+        f"🚨 *NEW PATIENT LEAD CAPTURED!*\n\n"
+        f"👤 *Name:* {name or 'Visitor'}\n"
+        f"📧 *Email:* {email or 'N/A'}\n"
+        f"📞 *Phone:* {phone or 'N/A'}\n"
+        f"🦷 *Interest:* {interest or 'General Appointment'}\n"
+        f"📊 *Score:* {score.upper()}\n"
+        f"📝 *Summary:* {summary[:200]}"
+    )
+
     if score == "hot":
         await insert_mock_outbox("slack", "hot_lead_alert", {
             "channel": "#sales-leads",
@@ -111,11 +123,18 @@ async def check_availability(date_str: str) -> Dict[str, Any]:
 
 
 async def request_human_handoff(tenant_id: str, conversation_id: str, reason: str) -> Dict[str, Any]:
-    """Flag conversation for human agent takeover and post Slack notification."""
+    """Flag conversation for human agent takeover and post Telegram / Slack notification."""
     now_iso = datetime.now(timezone.utc).isoformat()
     await execute(
         "UPDATE conversations SET status = 'handoff' WHERE id = ?",
         (conversation_id,)
+    )
+    from app.integrations.telegram import TelegramAdapter
+    telegram = TelegramAdapter()
+    await telegram.send_message(
+        f"⚠️ *HUMAN STAFF HANDOFF REQUESTED!*\n\n"
+        f"📋 *Reason:* {reason}\n"
+        f"💬 *Conversation ID:* `{conversation_id}`"
     )
     await insert_mock_outbox("slack", "human_handoff_alert", {
         "channel": "#front-desk-alerts",
