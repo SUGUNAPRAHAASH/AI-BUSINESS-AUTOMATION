@@ -119,6 +119,14 @@ async def capture_lead(
             }
         ]
     )
+    # Dispatch real Airtable record
+    from app.integrations.airtable import AirtableAdapter
+    airtable = AirtableAdapter()
+    await airtable.create_record(fields={
+        "Name": f"{name or 'Visitor'} (Score: {score.upper()})",
+        "Notes": f"Email: {email or 'N/A'} | Phone: {phone or 'N/A'} | Interest: {interest or 'General'} | {summary[:200]}"
+    })
+
     if score == "hot":
         await insert_mock_outbox("slack", "hot_lead_alert", {
             "channel": "#sales-leads",
