@@ -1,0 +1,57 @@
+services:
+  # 1. Python FastAPI AI Service Backend
+  - type: web
+    name: leadpilot-ai-backend
+    runtime: python
+    rootDir: leadpilot-ai/services/ai
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    plan: free
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: AI_SERVICE_API_KEY
+        value: lp_secret_key_demo_2026
+      - key: LLM_PROVIDER
+        value: gemini
+      - key: LLM_MODEL
+        value: gemini-3.5-flash
+      - key: EMBEDDING_MODEL
+        value: gemini-embedding-2
+      - key: EMBEDDING_DIM
+        value: 3072
+      - key: GEMINI_MODE
+        value: real
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: HUBSPOT_MODE
+        value: mock
+      - key: SLACK_MODE
+        value: mock
+      - key: GMAIL_MODE
+        value: mock
+      - key: SHOPIFY_MODE
+        value: mock
+      - key: VAPI_MODE
+        value: mock
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:///leadpilot.db
+
+  # 2. Next.js 14 Frontend Web Dashboard
+  - type: web
+    name: leadpilot-web
+    runtime: node
+    rootDir: leadpilot-ai/web
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    plan: free
+    envVars:
+      - key: NODE_VERSION
+        value: 20.14.0
+      - key: AI_SERVICE_API_KEY
+        value: lp_secret_key_demo_2026
+      - key: AI_SERVICE_URL
+        fromService:
+          type: web
+          name: leadpilot-ai-backend
+          property: host
