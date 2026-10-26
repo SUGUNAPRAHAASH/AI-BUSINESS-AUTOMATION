@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Send, Sparkles, User, AlertCircle, BookOpen, UserCheck } from "lucide-react";
+import { Send, Sparkles, User, AlertCircle } from "lucide-react";
 
 interface Message {
   role: "user" | "assistant";
@@ -130,41 +130,13 @@ export default function ChatPage() {
                 {m.content}
               </div>
 
-              {/* Citations */}
-              {m.citations && m.citations.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                  <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
-                    <BookOpen className="h-3 w-3 text-teal-400" /> Sources:
-                  </span>
-                  {m.citations.map((c, ci) => (
-                    <span
-                      key={ci}
-                      className="text-[11px] px-2 py-0.5 rounded-md bg-slate-900 border border-slate-800 text-teal-300 font-mono"
-                    >
-                      {c.source} ({Math.round(c.score * 1000) / 10}%)
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {/* Lead Capture Flag */}
-              {m.leadCaptured && (
-                <div className="p-3 rounded-xl bg-emerald-950/60 border border-emerald-500/30 text-xs text-emerald-300 flex items-center gap-2">
-                  <UserCheck className="h-4 w-4 shrink-0 text-emerald-400" />
-                  <div>
-                    <span className="font-semibold">Lead Qualified: </span>
-                    {m.leadCaptured.name} ({m.leadCaptured.email}) — <strong className="uppercase">{m.leadCaptured.score}</strong> ({m.leadCaptured.score_reason})
-                  </div>
-                </div>
-              )}
-
               {/* Human Handoff Banner */}
               {m.handoff && (
                 <div className="p-3 rounded-xl bg-amber-950/60 border border-amber-500/30 text-xs text-amber-300 flex items-center gap-2">
                   <AlertCircle className="h-4 w-4 shrink-0 text-amber-400" />
                   <div>
-                    <span className="font-semibold">Escalated to Human Desk: </span>
-                    A notification was dispatched to the front-desk Slack channel for immediate human follow-up.
+                    <span className="font-semibold">Human Desk Connected: </span>
+                    Our front-desk team has been notified and will assist you shortly.
                   </div>
                 </div>
               )}

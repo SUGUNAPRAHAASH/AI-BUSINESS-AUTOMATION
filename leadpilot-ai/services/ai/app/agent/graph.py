@@ -172,9 +172,20 @@ async def agent_node(state: AgentState) -> Dict[str, Any]:
     full_text = (state.get("current_input", "") + " " + result.content).lower()
     email_m = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', state.get("current_input", ""))
     phone_m = re.search(r'(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}', state.get("current_input", ""))
-    name_m = re.search(r'(?:my\s*(?:full\s*)?name\s*(?:is)?|i\s*am|this\s*is|name[:\s]+)\s*([a-zA-Z\s]+?)(?:,|$|\.|\b(?:my|email|phone)\b)', state.get("current_input", ""), re.IGNORECASE)
+    name_m = re.search(r'(?:my\s*(?:full\s*)?name\s*(?:is)?|i\s*am|this\s*is|name[:\s]+)\s*([a-zA-Z\s]+?)(?:,|$|\.|\b(?:my|email|phone|contact)\b)', state.get("current_input", ""), re.IGNORECASE)
+
+    # If name wasn't in the current message, check prior user messages
+    if not name_m:
+        for m in reversed(state.get("messages", [])):
+            if m.get("role") == "user":
+                prior_name_m = re.search(r'(?:my\s*(?:full\s*)?name\s*(?:is)?|i\s*am|this\s*is|name[:\s]+)\s*([a-zA-Z\s]+?)(?:,|$|\.|\b(?:my|email|phone|contact)\b)', m.get("content", ""), re.IGNORECASE)
+                if prior_name_m:
+                    name_m = prior_name_m
+                    break
 
     if (email_m or phone_m or name_m) and not lead_captured:
+        budget_m = re.search(r'(?:budget\s*(?:around|of|is)?\s*[\$]?\s*(\d+[\d,]*))|([\$]\s*\d+[\d,]*)', state.get("current_input", ""), re.IGNORECASE)
+        timeline_m = re.search(r'(?:start|in|within|next)?\s*(next\s*month|next\s*week|soon|immediately|\d+\s*(?:days|weeks|months)|saturday|tomorrow)', state.get("current_input", ""), re.IGNORECASE)
         lead_captured = await capture_lead(
             tenant_id=tenant_id,
             conversation_id=cid,
@@ -182,7 +193,8 @@ async def agent_node(state: AgentState) -> Dict[str, Any]:
             email=email_m.group(0) if email_m else None,
             phone=phone_m.group(0) if phone_m else None,
             interest="Teeth Whitening" if "whiten" in full_text else ("Invisalign" if "invisalign" in full_text else "General Appointment"),
-            timeline_text="Saturday" if "sat" in full_text else "Upcoming"
+            budget_text=budget_m.group(0) if budget_m else None,
+            timeline_text=timeline_m.group(0) if timeline_m else ("Saturday" if "sat" in full_text else "Upcoming")
         )
 
     # Also handle off-topic inquiries (e.g. horses)
@@ -191,8 +203,12 @@ async def agent_node(state: AgentState) -> Dict[str, Any]:
         handoff_reason = "Out of practice scope (animals)"
         await request_human_handoff(tenant_id, cid, handoff_reason)
 
+    # Clean out any bracketed source tags (e.g. [Source: services.md]) for production-grade UI
+    clean_answer = re.sub(r'\[Source:\s*[^\]]+\]', '', result.content).strip()
+    clean_answer = re.sub(r'\s{2,}', ' ', clean_answer)
+
     return {
-        "final_answer": result.content,
+        "final_answer": clean_answer,
         "lead_captured": lead_captured,
         "handoff": handoff,
         "handoff_reason": handoff_reason

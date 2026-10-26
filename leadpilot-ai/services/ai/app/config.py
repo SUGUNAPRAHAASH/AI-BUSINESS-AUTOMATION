@@ -55,12 +55,12 @@ class Settings(BaseModel):
     SHOPIFY_WEBHOOK_SECRET: str = os.getenv("SHOPIFY_WEBHOOK_SECRET", "shopify_test_secret_key_12345")
     VAPI_WEBHOOK_SECRET: str = os.getenv("VAPI_WEBHOOK_SECRET", "vapi_test_secret_key_12345")
 
-    # SMTP / Mailpit
     SMTP_HOST: str = os.getenv("SMTP_HOST", "localhost")
     SMTP_PORT: int = int(os.getenv("SMTP_PORT", "1025"))
     SMTP_USER: str = os.getenv("SMTP_USER", "")
     SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
     SMTP_FROM: str = os.getenv("SMTP_FROM", "BrightSmile Dental <hello@brightsmile.example.com>")
+    RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
 
 
 settings = Settings()
