@@ -1,0 +1,104 @@
+{
+  "name": "LP-W8-error-handler-retries",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "### LP-W8: Global Error Handler & Retry Queue\nCatches workflow execution failures, registers them in failed_jobs table, alerts on-call ops via Slack, and retries failed jobs on a 15-minute schedule.",
+        "height": 160,
+        "width": 380
+      },
+      "id": "sticky-w8",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [200, 100]
+    },
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Global Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [220, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-service:8000/v1/admin/mock-outbox",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"integration\": \"slack\",\n  \"action\": \"workflow_failure_alert\",\n  \"payload\": {\n    \"channel\": \"#ops-alerts\",\n    \"text\": \"🚨 Workflow Execution Failed! Workflow: \" + ($json.workflow?.name || 'Unknown') + \" | Node: \" + ($json.execution?.lastNodeExecuted || 'Unknown') + \" | Error: \" + ($json.execution?.error?.message || 'Uncaught error')\n  }\n}"
+      },
+      "id": "slack-error-alert",
+      "name": "Slack Error Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 240]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/15 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-retry",
+      "name": "Every 15 Min Retry",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [220, 440]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://ai-service:8000/v1/admin/failed-jobs",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.AI_SERVICE_API_KEY || 'lp_secret_key_demo_2026' }}"
+            }
+          ]
+        }
+      },
+      "id": "http-fetch-failed-jobs",
+      "name": "Fetch Open Failed Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 440]
+    }
+  ],
+  "connections": {
+    "Global Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Slack Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every 15 Min Retry": {
+      "main": [
+        [
+          {
+            "node": "Fetch Open Failed Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": true
+}

@@ -1,0 +1,11 @@
+{
+  "message": {
+    "type": "end-of-call-report",
+    "call": {
+      "id": "call_vapi_demo_98234",
+      "status": "ended",
+      "endedReason": "customer-ended-call",
+      "transcript": "AI Assistant: BrightSmile Dental, how can I help you today?\nCaller: Hi, my name is Marcus Vance. I am calling because I have a missing tooth on the lower right and I want to schedule a dental implant consultation.\nAI Assistant: We would be glad to help, Marcus! Our dental implant consultations include a 3D CBCT scan. When would you prefer to come in?\nCaller: Next Tuesday morning around 10am would be great. My phone number is 555-349-8812.\nAI Assistant: Perfect, I have your request noted for next Tuesday morning and our patient coordinator will call you back at 555-349-8812 to confirm your operatory slot.\nCaller: Thank you, bye!"
+    }
+  }
+}

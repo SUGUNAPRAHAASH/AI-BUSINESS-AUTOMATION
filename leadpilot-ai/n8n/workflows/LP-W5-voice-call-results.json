@@ -1,0 +1,128 @@
+{
+  "name": "LP-W5-voice-call-results",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "### LP-W5: Voice Call Results\nReceives Vapi voice end-of-call webhooks, triggers AI clinical call summarization, creates patient lead, and notifies team.",
+        "height": 160,
+        "width": 380
+      },
+      "id": "sticky-w5",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [200, 100]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "vapi-call-report",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "webhook-vapi",
+      "name": "Vapi End-of-Call Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 320],
+      "webhookId": "vapi-call-report"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-service:8000/v1/calls/summarize",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.AI_SERVICE_API_KEY || 'lp_secret_key_demo_2026' }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"external_call_id\": $json.body?.message?.call?.id || $json.body?.call_id || 'vapi_demo',\n  \"transcript\": $json.body?.message?.transcript || $json.body?.transcript || 'Caller requested dental implant consultation.'\n}"
+      },
+      "id": "http-summarize",
+      "name": "Summarize Call & Extract Intent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 320]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.follow_up_needed }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-followup-needed",
+      "name": "Follow-up Needed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [660, 320]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-service:8000/v1/admin/mock-outbox",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"integration\": \"slack\",\n  \"action\": \"voice_callback_alert\",\n  \"payload\": {\n    \"channel\": \"#front-desk-calls\",\n    \"text\": \"📞 Patient Callback Required: \" + $json.caller_name + \" (\" + $json.phone + \") - Summary: \" + $json.summary\n  }\n}"
+      },
+      "id": "slack-voice-alert",
+      "name": "Slack Voice Callback Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 220]
+    }
+  ],
+  "connections": {
+    "Vapi End-of-Call Webhook": {
+      "main": [
+        [
+          {
+            "node": "Summarize Call & Extract Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarize Call & Extract Intent": {
+      "main": [
+        [
+          {
+            "node": "Follow-up Needed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Follow-up Needed?": {
+      "main": [
+        [
+          {
+            "node": "Slack Voice Callback Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": true
+}

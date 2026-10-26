@@ -1,0 +1,149 @@
+{
+  "name": "LP-W3-email-intake-triage",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "### LP-W3: Email Intake & Triage\nTriages incoming patient emails, extracts scheduling requests or billing queries, drafts smart replies, and routes sensitive emails for human review.",
+        "height": 160,
+        "width": 380
+      },
+      "id": "sticky-w3",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [200, 100]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "email-intake",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "webhook-email",
+      "name": "Email Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 320],
+      "webhookId": "email-intake"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-service:8000/v1/emails/triage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.AI_SERVICE_API_KEY || 'lp_secret_key_demo_2026' }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body || $json) }}"
+      },
+      "id": "http-triage",
+      "name": "Call AI Email Triage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 320]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.needs_human }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-needs-human",
+      "name": "Requires Human Approval?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [660, 320]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-service:8000/v1/admin/mock-outbox",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"integration\": \"telegram\",\n  \"action\": \"human_approval_required\",\n  \"payload\": {\n    \"email_id\": $json.id,\n    \"reason\": $json.reason,\n    \"draft\": $json.draft_reply,\n    \"approve_url\": \"http://localhost:8000/v1/emails/\" + $json.id + \"/approve\",\n    \"reject_url\": \"http://localhost:8000/v1/emails/\" + $json.id + \"/reject\"\n  }\n}"
+      },
+      "id": "telegram-approval",
+      "name": "Request Approval via Telegram/Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 220]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-service:8000/v1/admin/mock-outbox",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"integration\": \"gmail\",\n  \"action\": \"auto_reply_sent\",\n  \"payload\": {\n    \"email_id\": $json.id,\n    \"draft\": $json.draft_reply\n  }\n}"
+      },
+      "id": "gmail-auto-reply",
+      "name": "Auto-Dispatch Response",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 420]
+    }
+  ],
+  "connections": {
+    "Email Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Call AI Email Triage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call AI Email Triage": {
+      "main": [
+        [
+          {
+            "node": "Requires Human Approval?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Requires Human Approval?": {
+      "main": [
+        [
+          {
+            "node": "Request Approval via Telegram/Slack",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Auto-Dispatch Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": true
+}

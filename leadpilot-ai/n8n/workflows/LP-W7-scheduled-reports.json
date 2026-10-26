@@ -1,0 +1,115 @@
+{
+  "name": "LP-W7-scheduled-reports",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "### LP-W7: Scheduled Reports\nExecutes daily at 18:00. Fetches executive KPI briefing from AI service and broadcasts summary via Email and Slack.",
+        "height": 160,
+        "width": 380
+      },
+      "id": "sticky-w7",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [200, 100]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 18 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-daily",
+      "name": "Daily 18:00 Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [220, 320]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://ai-service:8000/v1/reports/daily",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.AI_SERVICE_API_KEY || 'lp_secret_key_demo_2026' }}"
+            }
+          ]
+        }
+      },
+      "id": "http-daily-report",
+      "name": "Fetch Executive Briefing",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 320]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-service:8000/v1/admin/mock-outbox",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"integration\": \"slack\",\n  \"action\": \"daily_executive_report\",\n  \"payload\": {\n    \"channel\": \"#executive-kpis\",\n    \"text\": $json.executive_summary\n  }\n}"
+      },
+      "id": "slack-report",
+      "name": "Slack Executive Briefing",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-service:8000/v1/admin/mock-outbox",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"integration\": \"gmail\",\n  \"action\": \"daily_report_email\",\n  \"payload\": {\n    \"to\": \"owner@brightsmile.example.com\",\n    \"subject\": \"BrightSmile Dental Daily Ops Briefing\",\n    \"body\": $json.executive_summary\n  }\n}"
+      },
+      "id": "gmail-report",
+      "name": "Email Owner Ops Briefing",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 420]
+    }
+  ],
+  "connections": {
+    "Daily 18:00 Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Executive Briefing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Executive Briefing": {
+      "main": [
+        [
+          {
+            "node": "Slack Executive Briefing",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Email Owner Ops Briefing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": true
+}

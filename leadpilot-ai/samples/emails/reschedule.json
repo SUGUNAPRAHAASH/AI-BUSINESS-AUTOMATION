@@ -1,0 +1,6 @@
+{
+  "message_id": "msg_reschedule_101",
+  "from_addr": "clara.oswald@example.com",
+  "subject": "Need to reschedule my Friday dental cleaning",
+  "body": "Hi BrightSmile team,\n\nI have an appointment scheduled for this Friday at 2:00 PM for a dental cleaning with Dr. Mitchell. Unfortunately, a work meeting came up. Could we please reschedule to next Tuesday or Wednesday morning instead?\n\nThank you,\nClara Oswald\n(555) 234-5678"
+}

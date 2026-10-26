@@ -1,0 +1,6 @@
+Operator: BrightSmile Dental, virtual desk speaking. How can I assist you today?
+Caller: Hello! My name is David Miller. I have been suffering from a chipped front tooth since yesterday and I would like to get it evaluated for cosmetic bonding.
+Operator: I can certainly assist you with cosmetic bonding, David. Our bonding treatments range from $220 to $400 per tooth. Do you have a preferred time to see Dr. Mitchell?
+Caller: Can I come in tomorrow Thursday afternoon after 2 PM? My phone number is 555-871-3344.
+Operator: Excellent, I have captured your details for tomorrow Thursday afternoon. Our clinic team will reach out at 555-871-3344 to confirm your appointment.
+Caller: Thanks so much for your help!

@@ -1,0 +1,178 @@
+{
+  "name": "LP-W1-chat-gateway",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "### LP-W1: Chat Gateway (Telegram & Web)\nReceives incoming inquiries, calls LeadPilot AI /v1/chat, checks for handoff or leads, and routes replies.",
+        "height": 160,
+        "width": 380
+      },
+      "id": "sticky-w1",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [200, 100]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "leadpilot-chat",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Web Chat Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 320],
+      "webhookId": "leadpilot-chat"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalise incoming message payload\nconst body = $input.first().json.body || $input.first().json;\nreturn [{\n  json: {\n    message: body.message || 'Hello',\n    channel: body.channel || 'web',\n    external_id: body.external_id || 'web_session_1',\n    tenant: 'brightsmile'\n  }\n}];"
+      },
+      "id": "code-normalise",
+      "name": "Normalise Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 320]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-service:8000/v1/chat",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.AI_SERVICE_API_KEY || 'lp_secret_key_demo_2026' }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "retryOnFail": true,
+          "maxTries": 3,
+          "waitBetweenTries": 1000
+        }
+      },
+      "id": "http-ai-chat",
+      "name": "Call LeadPilot AI Service",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 320]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.handoff }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-handoff",
+      "name": "Needs Human Handoff?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [880, 320]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-service:8000/v1/admin/mock-outbox",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"integration\": \"slack\",\n  \"action\": \"handoff_alert\",\n  \"payload\": {\n    \"channel\": \"#front-desk\",\n    \"text\": \"Urgent: Conversation \" + $json.conversation_id + \" requested human agent handoff!\"\n  }\n}"
+      },
+      "id": "slack-alert",
+      "name": "Slack Handoff Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1100, 440]
+    }
+  ],
+  "connections": {
+    "Web Chat Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalise Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalise Payload": {
+      "main": [
+        [
+          {
+            "node": "Call LeadPilot AI Service",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call LeadPilot AI Service": {
+      "main": [
+        [
+          {
+            "node": "Needs Human Handoff?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Human Handoff?": {
+      "main": [
+        [
+          {
+            "node": "Slack Handoff Alert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": true
+}

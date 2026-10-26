@@ -1,0 +1,41 @@
+services:
+  postgres:
+    ports: [] # Closed to external network in production
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2048M
+    restart: always
+
+  n8n:
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1024M
+    restart: always
+
+  ai-service:
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2048M
+    restart: always
+
+  mcp-server:
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+    restart: always
+
+  web:
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1024M
+    restart: always

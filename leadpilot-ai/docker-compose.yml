@@ -1,0 +1,140 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: leadpilot-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: leadpilot
+      POSTGRES_PASSWORD: leadpilot_password_demo
+      POSTGRES_DB: leadpilot
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U leadpilot -d leadpilot"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - leadpilot-net
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: leadpilot-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=n8n
+      - DB_POSTGRESDB_USER=leadpilot
+      - DB_POSTGRESDB_PASSWORD=leadpilot_password_demo
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-supersecretn8nencryptionkey2026!}
+      - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678/}
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-UTC}
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_VERSION_NOTIFICATIONS_ENABLED=false
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/data/workflows:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - leadpilot-net
+
+  ai-service:
+    build:
+      context: ./services/ai
+      dockerfile: Dockerfile
+    container_name: leadpilot-ai-service
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://leadpilot:leadpilot_password_demo@postgres:5432/leadpilot
+      - AI_SERVICE_API_KEY=${AI_SERVICE_API_KEY:-lp_secret_key_demo_2026}
+      - LLM_PROVIDER=${LLM_PROVIDER:-gemini}
+      - LLM_MODEL=${LLM_MODEL:-gemini-2.5-flash}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-004}
+      - EMBEDDING_DIM=${EMBEDDING_DIM:-768}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODE=${GEMINI_MODE:-mock}
+      - HUBSPOT_MODE=${HUBSPOT_MODE:-mock}
+      - SLACK_MODE=${SLACK_MODE:-mock}
+      - GMAIL_MODE=${GMAIL_MODE:-mock}
+      - SHEETS_MODE=${SHEETS_MODE:-mock}
+      - AIRTABLE_MODE=${AIRTABLE_MODE:-mock}
+      - TELEGRAM_MODE=${TELEGRAM_MODE:-mock}
+      - SHOPIFY_MODE=${SHOPIFY_MODE:-mock}
+      - VAPI_MODE=${VAPI_MODE:-mock}
+      - SMTP_HOST=mailpit
+      - SMTP_PORT=1025
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - leadpilot-net
+
+  mcp-server:
+    build:
+      context: ./services/mcp
+      dockerfile: Dockerfile
+    container_name: leadpilot-mcp-server
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    environment:
+      - AI_SERVICE_URL=http://ai-service:8000
+      - AI_SERVICE_API_KEY=${AI_SERVICE_API_KEY:-lp_secret_key_demo_2026}
+      - MCP_PORT=8765
+    depends_on:
+      ai-service:
+        condition: service_healthy
+    networks:
+      - leadpilot-net
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: leadpilot-web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - AI_SERVICE_URL=http://ai-service:8000
+      - AI_SERVICE_API_KEY=${AI_SERVICE_API_KEY:-lp_secret_key_demo_2026}
+      - NEXT_PUBLIC_AI_SERVICE_URL=/api/proxy
+    depends_on:
+      ai-service:
+        condition: service_healthy
+    networks:
+      - leadpilot-net
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: leadpilot-mailpit
+    restart: unless-stopped
+    ports:
+      - "8025:8025" # Web UI
+      - "1025:1025" # SMTP Port
+    networks:
+      - leadpilot-net
+
+volumes:
+  postgres_data:
+  n8n_data:
+
+networks:
+  leadpilot-net:
+    driver: bridge

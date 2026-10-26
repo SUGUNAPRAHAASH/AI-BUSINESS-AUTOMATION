@@ -1,0 +1,29 @@
+{
+  "id": 892341209,
+  "order_number": "BS-1089",
+  "email": "sarah.buyer@example.com",
+  "created_at": "2026-10-26T18:00:00Z",
+  "currency": "USD",
+  "total_price": "299.00",
+  "customer": {
+    "first_name": "Sarah",
+    "last_name": "Connor",
+    "email": "sarah.buyer@example.com"
+  },
+  "line_items": [
+    {
+      "id": 192831,
+      "sku": "SKU-FLOSS-04",
+      "name": "Water Flosser Cordless Advanced",
+      "quantity": 1,
+      "price": "99.00"
+    },
+    {
+      "id": 192832,
+      "sku": "SKU-WKIT-01",
+      "name": "Professional At-Home Whitening Kit",
+      "quantity": 2,
+      "price": "100.00"
+    }
+  ]
+}

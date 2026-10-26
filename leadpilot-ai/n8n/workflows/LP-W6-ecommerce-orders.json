@@ -1,0 +1,96 @@
+{
+  "name": "LP-W6-ecommerce-orders",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "### LP-W6: E-Commerce Orders\nHandles Shopify order webhooks, checks and decrements local inventory, flags low-stock items to Slack, and triggers order confirmations.",
+        "height": 160,
+        "width": 380
+      },
+      "id": "sticky-w6",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [200, 100]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "shopify-orders",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "webhook-shopify",
+      "name": "Shopify Order Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 320],
+      "webhookId": "shopify-orders"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-service:8000/webhooks/shopify",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body || $json) }}"
+      },
+      "id": "http-forward-order",
+      "name": "Forward to LeadPilot Shopify Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 320]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-service:8000/v1/admin/mock-outbox",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"integration\": \"slack\",\n  \"action\": \"new_order_recorded\",\n  \"payload\": {\n    \"channel\": \"#store-orders\",\n    \"text\": \"🛍️ New Order Recorded: #\" + ($json.order_id || 'unknown') + \" - Status: \" + $json.status\n  }\n}"
+      },
+      "id": "slack-order-alert",
+      "name": "Slack Order Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 320]
+    }
+  ],
+  "connections": {
+    "Shopify Order Webhook": {
+      "main": [
+        [
+          {
+            "node": "Forward to LeadPilot Shopify Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Forward to LeadPilot Shopify Webhook": {
+      "main": [
+        [
+          {
+            "node": "Slack Order Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": true
+}

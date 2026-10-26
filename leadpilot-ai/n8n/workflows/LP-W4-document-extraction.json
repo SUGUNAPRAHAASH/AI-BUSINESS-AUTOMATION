@@ -1,0 +1,134 @@
+{
+  "name": "LP-W4-document-extraction",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "### LP-W4: Document Intake & Extraction\nAccepts invoices and vendor documents, extracts totals and line items, flags low-confidence files for manual review, and writes to spreadsheets.",
+        "height": 160,
+        "width": 380
+      },
+      "id": "sticky-w4",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [200, 100]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "document-intake",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-doc",
+      "name": "Document Intake Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 320],
+      "webhookId": "document-intake"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.confidence || 0.95 }}",
+              "operation": "largerEqual",
+              "value2": 0.8
+            }
+          ]
+        }
+      },
+      "id": "if-high-confidence",
+      "name": "High Confidence?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [480, 320]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-service:8000/v1/admin/mock-outbox",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"integration\": \"sheets\",\n  \"action\": \"invoice_recorded\",\n  \"payload\": {\n    \"invoice_number\": $json.invoice_number,\n    \"vendor\": $json.vendor_name,\n    \"total\": $json.total\n  }\n}"
+      },
+      "id": "sheets-record",
+      "name": "Sync to Accounting Spreadsheet",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-service:8000/v1/admin/mock-outbox",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"integration\": \"slack\",\n  \"action\": \"document_needs_review\",\n  \"payload\": {\n    \"channel\": \"#accounting-review\",\n    \"text\": \"⚠️ Low confidence invoice extraction: \" + ($json.filename || 'Invoice') + \" requires verification.\"\n  }\n}"
+      },
+      "id": "slack-review",
+      "name": "Slack Needs Review Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 420]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "respond-doc",
+      "name": "Respond with Extracted Data",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [960, 320]
+    }
+  ],
+  "connections": {
+    "Document Intake Webhook": {
+      "main": [
+        [
+          {
+            "node": "High Confidence?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "High Confidence?": {
+      "main": [
+        [
+          {
+            "node": "Sync to Accounting Spreadsheet",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Respond with Extracted Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack Needs Review Alert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Respond with Extracted Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": true
+}
