@@ -53,7 +53,7 @@ class EmailAdapter:
                     elif resp.status_code == 403 and to_addr != "prahaashnms18@gmail.com":
                         logger.warning(f"Resend sandbox requires delivery to account owner prahaashnms18@gmail.com. Routing copy.")
                         resend_payload["to"] = ["prahaashnms18@gmail.com"]
-                        resend_payload["subject"] = f"[Patient Delivery: {to_addr}] {subject}"
+                        resend_payload["subject"] = subject
                         retry_resp = await client.post("https://api.resend.com/emails", headers=headers, json=resend_payload)
                         if retry_resp.status_code in (200, 201):
                             logger.info(f"Delivered sandbox copy to prahaashnms18@gmail.com (for {to_addr})")

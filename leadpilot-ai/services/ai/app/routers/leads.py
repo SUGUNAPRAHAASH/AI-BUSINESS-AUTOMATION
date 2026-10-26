@@ -74,11 +74,34 @@ async def generate_and_send_followup(lead_id: str):
 
     outbox_id = None
     if email:
-        outbox_id = await insert_mock_outbox("gmail", "send_followup_email", {
-            "to": email,
-            "subject": subject,
-            "body": body
-        })
+        from app.integrations.gmail import EmailAdapter
+        emailer = EmailAdapter()
+        email_html = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+            <div style="text-align: center; padding-bottom: 16px; border-bottom: 2px solid #0d9488;">
+                <h1 style="color: #0d9488; margin: 0; font-size: 22px;">🦷 BrightSmile Dental</h1>
+                <p style="color: #64748b; font-size: 13px; margin: 4px 0 0 0;">Priority Consultation Follow-up</p>
+            </div>
+            <div style="padding: 20px 0; color: #1e293b; line-height: 1.6;">
+                <p>Dear <strong>{name}</strong>,</p>
+                <p>Thank you for contacting BrightSmile Dental regarding <strong>{interest}</strong>.</p>
+                <p>Our treatment coordinator has reviewed your file. We would love to welcome you in for a complimentary 3D digital dental scan and consultation with Dr. Sarah Mitchell.</p>
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 16px 0;">
+                    <p style="margin: 4px 0;"><strong>🏥 Clinic:</strong> BrightSmile Dental Suite 400</p>
+                    <p style="margin: 4px 0;"><strong>🩺 Treatment Focus:</strong> {interest}</p>
+                    <p style="margin: 4px 0;"><strong>📞 Direct Reception:</strong> (555) 019-2831</p>
+                </div>
+                <p>Please reply directly to this email to book your preferred morning or afternoon slot, or call our desk directly.</p>
+                <p style="margin-top: 24px;">Warm regards,<br><strong>BrightSmile Patient Care Team</strong></p>
+            </div>
+        </div>
+        """
+        await emailer.send_email(
+            to_addr=email,
+            subject=subject,
+            body=email_html,
+            is_html=True
+        )
 
     return {
         "status": "followup_generated",

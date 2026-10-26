@@ -13,6 +13,21 @@ async def search_knowledge_base(query: str, tenant_id: str, k: int = 5) -> List[
     return await retriever.search(query, top_k=k)
 
 
+def clean_patient_name(raw_name: Optional[str]) -> Optional[str]:
+    """Clean conversational filler words, polite phrases, and punctuation from extracted patient names."""
+    if not raw_name:
+        return None
+    import re
+    cleaned = raw_name.strip()
+    cleaned = re.sub(r'^(?:my\s*(?:full\s*)?name\s*(?:is)?|i\s*am|this\s*is|name[:\s]+)\s*', '', cleaned, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r'\b(thank\s*you|thanks|please|pls|and|i\s*need|i\s*want|booking|appointment|here|hello|hi)\b.*$', '', cleaned, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r'[,.!?_\-:]+$', '', cleaned).strip()
+    words = cleaned.split()
+    if words and len(cleaned) >= 2:
+        return " ".join([w.capitalize() for w in words])
+    return cleaned if len(cleaned) >= 2 else None
+
+
 async def capture_lead(
     tenant_id: str,
     conversation_id: Optional[str] = None,
@@ -26,6 +41,31 @@ async def capture_lead(
 ) -> Dict[str, Any]:
     """Capture or update a qualified prospective patient lead."""
     now_iso = datetime.now(timezone.utc).isoformat()
+    name = clean_patient_name(name)
+
+    # Multi-tier deduplication lookup: check conversation_id, email, then phone
+    existing = None
+    if conversation_id:
+        existing = await fetch_one(
+            "SELECT id, name, email, phone, crm_id FROM leads WHERE tenant_id = ? AND conversation_id = ? ORDER BY created_at DESC LIMIT 1",
+            (tenant_id, conversation_id)
+        )
+    if not existing and email:
+        existing = await fetch_one(
+            "SELECT id, name, email, phone, crm_id FROM leads WHERE tenant_id = ? AND lower(email) = lower(?) LIMIT 1",
+            (tenant_id, email)
+        )
+    if not existing and phone:
+        existing = await fetch_one(
+            "SELECT id, name, email, phone, crm_id FROM leads WHERE tenant_id = ? AND phone = ? LIMIT 1",
+            (tenant_id, phone)
+        )
+
+    # Merge with previous values if this turn only added contact details
+    if existing:
+        name = name or existing.get("name")
+        email = email or existing.get("email")
+        phone = phone or existing.get("phone")
 
     # Determine lead score
     has_contact = bool(email or phone)
@@ -46,21 +86,14 @@ async def capture_lead(
     next_action = "Schedule initial 3D consultation scan with treatment coordinator." if score == "hot" else "Send informational brochure."
 
     lead_id = str(uuid.uuid4())
-    existing = None
-    if email:
-        existing = await fetch_one(
-            "SELECT id FROM leads WHERE tenant_id = ? AND lower(email) = lower(?)",
-            (tenant_id, email)
-        )
-
     if existing:
         lead_id = existing["id"]
         await execute(
-            "UPDATE leads SET name = COALESCE(?, name), phone = COALESCE(?, phone), "
+            "UPDATE leads SET name = COALESCE(?, name), email = COALESCE(?, email), phone = COALESCE(?, phone), "
             "interest = COALESCE(?, interest), budget_text = COALESCE(?, budget_text), "
             "timeline_text = COALESCE(?, timeline_text), score = ?, score_reason = ?, "
             "summary = ?, updated_at = ? WHERE id = ?",
-            (name, phone, interest, budget_text, timeline_text, score, reason[:200], summary[:300], now_iso, lead_id)
+            (name, email, phone, interest, budget_text, timeline_text, score, reason[:200], summary[:300], now_iso, lead_id)
         )
     else:
         await execute(
@@ -83,49 +116,52 @@ async def capture_lead(
         "next_best_action": next_action
     }
 
-    # If lead is captured, send alerts
-    from app.integrations.telegram import TelegramAdapter
-    telegram = TelegramAdapter()
-    await telegram.send_message(
-        f"🚨 *NEW PATIENT LEAD CAPTURED!*\n\n"
-        f"👤 *Name:* {name or 'Visitor'}\n"
-        f"📧 *Email:* {email or 'N/A'}\n"
-        f"📞 *Phone:* {phone or 'N/A'}\n"
-        f"🦷 *Interest:* {interest or 'General Appointment'}\n"
-        f"📊 *Score:* {score.upper()}\n"
-        f"📝 *Summary:* {summary[:200]}"
-    )
+    # Only dispatch real-time team alerts (Telegram & Slack) when contact details are present,
+    # and avoid duplicate pings if an alert was already sent for this patient
+    already_alerted = bool(existing and (existing.get("email") or existing.get("phone")))
 
-    # Dispatch real Slack alert
-    from app.integrations.slack import SlackAdapter
-    slack = SlackAdapter()
-    await slack.send_message(
-        text=f"🚨 New Patient Lead: {name or 'Visitor'} ({score.upper()})",
-        blocks=[
-            {
-                "type": "header",
-                "text": {"type": "plain_text", "text": "🚨 New Patient Lead Captured"}
-            },
-            {
-                "type": "section",
-                "fields": [
-                    {"type": "mrkdwn", "text": f"*Name:* {name or 'Visitor'}"},
-                    {"type": "mrkdwn", "text": f"*Score:* {score.upper()}"},
-                    {"type": "mrkdwn", "text": f"*Email:* {email or 'N/A'}"},
-                    {"type": "mrkdwn", "text": f"*Phone:* {phone or 'N/A'}"},
-                    {"type": "mrkdwn", "text": f"*Interest:* {interest or 'General'}"},
-                    {"type": "mrkdwn", "text": f"*Timeline:* {timeline_text or 'Soon'}"}
-                ]
-            }
-        ]
-    )
-    # Dispatch real Airtable record
-    from app.integrations.airtable import AirtableAdapter
-    airtable = AirtableAdapter()
-    await airtable.create_record(fields={
-        "Name": f"{name or 'Visitor'} (Score: {score.upper()})",
-        "Notes": f"Email: {email or 'N/A'} | Phone: {phone or 'N/A'} | Interest: {interest or 'General'} | {summary[:200]}"
-    })
+    if has_contact and not already_alerted:
+        from app.integrations.telegram import TelegramAdapter
+        telegram = TelegramAdapter()
+        await telegram.send_message(
+            f"🚨 *NEW PATIENT LEAD CAPTURED!*\n\n"
+            f"👤 *Name:* {name or 'Visitor'}\n"
+            f"📧 *Email:* {email or 'N/A'}\n"
+            f"📞 *Phone:* {phone or 'N/A'}\n"
+            f"🦷 *Interest:* {interest or 'General Appointment'}\n"
+            f"📊 *Score:* {score.upper()}\n"
+            f"📝 *Summary:* {summary[:200]}"
+        )
+
+        from app.integrations.slack import SlackAdapter
+        slack = SlackAdapter()
+        await slack.send_message(
+            text=f"🚨 New Patient Lead: {name or 'Visitor'} ({score.upper()})",
+            blocks=[
+                {
+                    "type": "header",
+                    "text": {"type": "plain_text", "text": "🚨 New Patient Lead Captured"}
+                },
+                {
+                    "type": "section",
+                    "fields": [
+                        {"type": "mrkdwn", "text": f"*Name:* {name or 'Visitor'}"},
+                        {"type": "mrkdwn", "text": f"*Score:* {score.upper()}"},
+                        {"type": "mrkdwn", "text": f"*Email:* {email or 'N/A'}"},
+                        {"type": "mrkdwn", "text": f"*Phone:* {phone or 'N/A'}"},
+                        {"type": "mrkdwn", "text": f"*Interest:* {interest or 'General'}"},
+                        {"type": "mrkdwn", "text": f"*Timeline:* {timeline_text or 'Soon'}"}
+                    ]
+                }
+            ]
+        )
+
+        from app.integrations.airtable import AirtableAdapter
+        airtable = AirtableAdapter()
+        await airtable.create_record(fields={
+            "Name": f"{name or 'Visitor'} (Score: {score.upper()})",
+            "Notes": f"Email: {email or 'N/A'} | Phone: {phone or 'N/A'} | Interest: {interest or 'General'} | {summary[:200]}"
+        })
     # Dispatch real HubSpot contact
     try:
         from app.integrations.hubspot import HubSpotAdapter

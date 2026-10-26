@@ -51,6 +51,15 @@ class MockLLMClient:
         # 2. Check for tool invocation needs
         msg_lower = last_user_msg.lower()
         extracted_name = name_match.group(1).strip() if name_match else None
+        if extracted_name:
+            extracted_name = re.sub(r'\b(thank\s*you|thanks|please|pls|and|i\s*need|i\s*want|booking|appointment|here|hello|hi)\b.*$', '', extracted_name, flags=re.IGNORECASE).strip()
+            extracted_name = re.sub(r'[,.!?_\-:]+$', '', extracted_name).strip()
+            words = extracted_name.split()
+            if words and len(extracted_name) >= 2:
+                extracted_name = " ".join([w.capitalize() for w in words])
+            else:
+                extracted_name = None
+
         has_appointment = bool(re.search(r'app?o[iy]nt?m?e?nt|schedul|book|slot|reserve', msg_lower)) or bool(re.search(r'app?o[iy]nt?m?e?nt|schedul|book|slot|reserve', all_conversation_text.lower()))
         has_saturday = bool(re.search(r'sat(ur(day)?)?|weekend', msg_lower)) or bool(re.search(r'sat(ur(day)?)?|weekend', all_conversation_text.lower()))
         has_whitening = "whiten" in msg_lower or "whiten" in all_conversation_text.lower()
