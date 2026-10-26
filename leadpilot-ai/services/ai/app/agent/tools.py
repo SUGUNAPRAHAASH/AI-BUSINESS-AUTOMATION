@@ -126,6 +126,20 @@ async def capture_lead(
         "Name": f"{name or 'Visitor'} (Score: {score.upper()})",
         "Notes": f"Email: {email or 'N/A'} | Phone: {phone or 'N/A'} | Interest: {interest or 'General'} | {summary[:200]}"
     })
+    # Dispatch real HubSpot contact
+    try:
+        from app.integrations.hubspot import HubSpotAdapter
+        hubspot = HubSpotAdapter()
+        await hubspot.upsert_contact(
+            email=email or f"lead_{uuid.uuid4().hex[:6]}@patient.brightsmiledental.com",
+            name=name,
+            phone=phone,
+            score=score,
+            source="leadpilot_chat",
+            summary=summary
+        )
+    except Exception as e:
+        logger.error(f"HubSpot dispatch error: {e}")
 
     if score == "hot":
         await insert_mock_outbox("slack", "hot_lead_alert", {
