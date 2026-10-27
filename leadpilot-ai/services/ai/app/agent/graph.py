@@ -167,14 +167,15 @@ async def agent_node(state: AgentState) -> Dict[str, Any]:
         elif tc.name == "check_availability":
             await check_availability(tc.arguments.get("date", "2026-11-01"))
 
-    # Automatic lead capture triggered when phone number is provided ("THEN NUMBER SHOULD TRIGGER")
+    # Automatic lead capture triggered when phone number or email is provided
     import re
     full_text = (state.get("current_input", "") + " " + result.content).lower()
     email_m = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', state.get("current_input", ""))
     phone_m = re.search(r'(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}|\b\d{10,12}\b', state.get("current_input", ""))
-    name_m = re.search(r'(?:my\s*(?:full\s*)?name\s*(?:is)?|i\s*am|this\s*is|name[:\s]+)\s*([a-zA-Z\s]+?)(?:,|$|\.|\b(?:my|email|phone|contact)\b)', state.get("current_input", ""), re.IGNORECASE)
+    name_m = re.search(r'(?:my\s*(?:full\s*)?name\s*(?:is)?|i\s*am|this\s*is|name[:\s]+)\s*([a-zA-Z\s]+?)(?:,|$|\.|\b(?:my|email|phone|contact|location|city)\b)', state.get("current_input", ""), re.IGNORECASE)
+    loc_m = re.search(r'(?:location|address|city|area|located in|living in|from)[:\s]+([a-zA-Z0-9\s,.-]+?)(?:,|$|\.|\b(?:my|email|phone|contact|name|interest)\b)', state.get("current_input", ""), re.IGNORECASE)
 
-    # Check prior messages for email and name if not in current message
+    # Check prior messages for email, phone, name, and location if missing in current message
     if not email_m:
         for m in reversed(state.get("messages", [])):
             if m.get("role") == "user":
@@ -183,27 +184,44 @@ async def agent_node(state: AgentState) -> Dict[str, Any]:
                     email_m = em
                     break
 
+    if not phone_m:
+        for m in reversed(state.get("messages", [])):
+            if m.get("role") == "user":
+                pm = re.search(r'(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}|\b\d{10,12}\b', m.get("content", ""))
+                if pm:
+                    phone_m = pm
+                    break
+
     if not name_m:
         for m in reversed(state.get("messages", [])):
             if m.get("role") == "user":
-                prior_name_m = re.search(r'(?:my\s*(?:full\s*)?name\s*(?:is)?|i\s*am|this\s*is|name[:\s]+)\s*([a-zA-Z\s]+?)(?:,|$|\.|\b(?:my|email|phone|contact)\b)', m.get("content", ""), re.IGNORECASE)
+                prior_name_m = re.search(r'(?:my\s*(?:full\s*)?name\s*(?:is)?|i\s*am|this\s*is|name[:\s]+)\s*([a-zA-Z\s]+?)(?:,|$|\.|\b(?:my|email|phone|contact|location|city)\b)', m.get("content", ""), re.IGNORECASE)
                 if prior_name_m:
                     name_m = prior_name_m
+                    break
+
+    if not loc_m:
+        for m in reversed(state.get("messages", [])):
+            if m.get("role") == "user":
+                prior_loc_m = re.search(r'(?:location|address|city|area|located in|living in|from)[:\s]+([a-zA-Z0-9\s,.-]+?)(?:,|$|\.|\b(?:my|email|phone|contact|name|interest)\b)', m.get("content", ""), re.IGNORECASE)
+                if prior_loc_m:
+                    loc_m = prior_loc_m
                     break
 
     # Trigger lead capture when phone number or email is provided
     if (phone_m or email_m) and not lead_captured:
         budget_m = re.search(r'(?:budget\s*(?:around|of|is)?\s*[\$]?\s*(\d+[\d,]*))|([\$]\s*\d+[\d,]*)', full_text, re.IGNORECASE)
-        timeline_m = re.search(r'(?:start|in|within|next)?\s*(next\s*month|next\s*week|soon|immediately|\d+\s*(?:days|weeks|months)|saturday|tomorrow)', full_text, re.IGNORECASE)
+        timeline_m = re.search(r'(?:start|in|within|next)?\s*(next\s*month|next\s*week|soon|immediately|\d+\s*(?:days|weeks|months)|tomorrow|october\s*\d+|november\s*\d+)', full_text, re.IGNORECASE)
         lead_captured = await capture_lead(
             tenant_id=tenant_id,
             conversation_id=cid,
             name=name_m.group(1).strip() if name_m else "Valued Patient",
             email=email_m.group(0) if email_m else None,
             phone=phone_m.group(0) if phone_m else None,
+            location=loc_m.group(1).strip() if loc_m else None,
             interest="Teeth Whitening" if "whiten" in full_text else ("Invisalign" if "invisalign" in full_text else "General Appointment"),
             budget_text=budget_m.group(0) if budget_m else None,
-            timeline_text=timeline_m.group(0) if timeline_m else ("Saturday at 11:00 AM" if "sat" in full_text else "Upcoming")
+            timeline_text=timeline_m.group(0) if timeline_m else "General Intake / Slot Selection Pending"
         )
 
     # Also handle off-topic inquiries (e.g. horses)

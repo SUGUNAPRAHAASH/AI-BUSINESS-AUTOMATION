@@ -55,28 +55,16 @@ class EmailAdapter:
                         logger.info(f"Live email delivered via Resend API to {to_addr}")
                         await insert_mock_outbox("gmail", "email_delivered", payload)
                         return {"status": "sent", "transport": "resend", "data": resp.json()}
-                    elif resp.status_code == 403 and to_addr.lower() != self.hospital_email.lower():
-                        logger.warning(f"Resend sandbox limitation: routing patient copy to hospital owner {self.hospital_email}")
-                        prefix_subject = f"[PATIENT COPY -> {to_addr}] {subject}"
-                        sandbox_notice = (
-                            f'<div style="background:#fef3c7;border:1px solid #f59e0b;color:#92400e;padding:12px;border-radius:8px;margin-bottom:16px;font-size:12px;font-family:sans-serif;">'
-                            f'<strong>Hospital Dispatch Note:</strong> In Resend Sandbox mode, a live copy of this patient confirmation '
-                            f'was dispatched to your hospital administrator mailbox (<code>{self.hospital_email}</code>) on behalf of recipient <code>{to_addr}</code>.</div>'
-                        )
-                        resend_payload["to"] = [self.hospital_email]
-                        resend_payload["subject"] = prefix_subject
-                        if is_html:
-                            resend_payload["html"] = sandbox_notice + body
-                        else:
-                            resend_payload["text"] = f"[Hospital Dispatch Note: Sent on behalf of {to_addr}]\n\n" + body
-
-                        retry_resp = await client.post("https://api.resend.com/emails", headers=headers, json=resend_payload)
-                        if retry_resp.status_code in (200, 201):
-                            logger.info(f"Delivered sandbox patient copy to {self.hospital_email} (for {to_addr})")
-                            await insert_mock_outbox("gmail", "email_dispatched_sandbox_copy", {"target_recipient": to_addr, "owner_delivered": self.hospital_email, "subject": prefix_subject})
-                            return {"status": "sent_sandbox_owner", "transport": "resend", "data": retry_resp.json()}
                     else:
-                        logger.warning(f"Resend API error ({resp.status_code}): {resp.text}")
+                        logger.warning(f"Resend dispatch notice ({resp.status_code}): {resp.text}")
+                        # Strict rule: NEVER re-route patient email copies to hospital inbox
+                        await insert_mock_outbox("gmail", "email_dispatch_attempted", {
+                            "to": to_addr,
+                            "subject": subject,
+                            "status_code": resp.status_code,
+                            "notice": "Resend sandbox delivery limited to verified addresses. Patient copy not routed to hospital mailbox."
+                        })
+                        return {"status": "dispatched_logged", "transport": "resend", "code": resp.status_code}
             except Exception as e:
                 logger.error(f"Resend dispatch error: {e}")
 
@@ -109,9 +97,10 @@ class EmailAdapter:
         patient_name = data.get("name") or "New Patient"
         patient_email = data.get("email") or "Not provided"
         patient_phone = data.get("phone") or "Not provided"
-        doctor_name = data.get("doctor_name") or "Dr. Sarah Mitchell, DDS"
-        date_time = data.get("date_time") or data.get("timeline_text") or "Upcoming Consultation"
-        service = data.get("service") or data.get("interest") or "Basic Consultation (30 mins)"
+        patient_location = data.get("location") or data.get("patient_location") or "Not provided"
+        doctor_name = data.get("doctor_name") or "Clinic Triage Coordinator"
+        date_time = data.get("date_time") or data.get("timeline_text") or "Pending Confirmation"
+        service = data.get("service") or data.get("interest") or "Consultation Inquiry"
         notes = data.get("notes") or data.get("summary") or "Patient self-booked via AI assistant."
         score = (data.get("score") or "HOT").upper()
 
@@ -146,6 +135,10 @@ class EmailAdapter:
                         <tr>
                             <td style="padding: 6px 0; color: #64748b;"><strong>📞 Patient Phone:</strong></td>
                             <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">{patient_phone}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 6px 0; color: #64748b;"><strong>📍 Patient Location:</strong></td>
+                            <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">{patient_location}</td>
                         </tr>
                         <tr>
                             <td style="padding: 6px 0; color: #64748b;"><strong>📅 Scheduled Slot:</strong></td>

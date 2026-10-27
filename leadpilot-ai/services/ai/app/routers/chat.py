@@ -23,12 +23,23 @@ async def chat_endpoint(req: ChatRequest):
         external_id=req.external_id,
         conversation_id=req.conversation_id
     )
+    # Check if inquiry has scheduling, doctor, or clinical triage intent
+    scheduling_card = None
+    msg_low = req.message.lower()
+    if any(k in msg_low for k in ["book", "schedul", "appoint", "doctor", "slot", "hour", "saturday", "dr ", "time", "pain", "whiten", "invisalign", "bleed", "visit", "consult", "cost", "price", "emergency"]):
+        try:
+            from app.routers.schedule import get_clinical_triage
+            scheduling_card = await get_clinical_triage(symptoms=req.message)
+        except Exception:
+            pass
+
     return ChatResponse(
         answer=res["answer"],
         citations=res["citations"],
         lead_captured=res["lead_captured"],
         handoff=res["handoff"],
-        conversation_id=res["conversation_id"]
+        conversation_id=res["conversation_id"],
+        scheduling_card=scheduling_card
     )
 
 

@@ -39,8 +39,10 @@ class BookAppointmentRequest(BaseModel):
     patient_name: str
     patient_email: str
     patient_phone: Optional[str] = None
+    patient_location: Optional[str] = None
     service_type: str = "Basic Consultation (30 mins)"
     notes: Optional[str] = None
+
 
 
 # --- Helper Time Functions ---
@@ -333,9 +335,9 @@ async def book_appointment(req: BookAppointmentRequest):
     app_id = str(uuid.uuid4())
     now_iso = datetime.now(timezone.utc).isoformat()
     await execute(
-        "INSERT INTO appointments (id, tenant_id, doctor_id, doctor_name, patient_name, patient_email, patient_phone, appointment_date, start_time, end_time, duration_mins, service_type, status, notes, created_at) "
-        "VALUES (?, 'a0000000-0000-0000-0000-000000000001', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?)",
-        (app_id, target_doctor_id, assigned_doctor["name"], req.patient_name, req.patient_email, req.patient_phone, req.appointment_date, req.start_time, req_end_str, req.duration_mins, req.service_type, req.notes, now_iso)
+        "INSERT INTO appointments (id, tenant_id, doctor_id, doctor_name, patient_name, patient_email, patient_phone, patient_location, appointment_date, start_time, end_time, duration_mins, service_type, status, notes, created_at) "
+        "VALUES (?, 'a0000000-0000-0000-0000-000000000001', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?)",
+        (app_id, target_doctor_id, assigned_doctor["name"], req.patient_name, req.patient_email, req.patient_phone, req.patient_location, req.appointment_date, req.start_time, req_end_str, req.duration_mins, req.service_type, req.notes, now_iso)
     )
 
     # 1. Dispatch Hospital Side Intimation Email to prahaashnms18@gmail.com
@@ -344,6 +346,7 @@ async def book_appointment(req: BookAppointmentRequest):
         "name": req.patient_name,
         "email": req.patient_email,
         "phone": req.patient_phone,
+        "patient_location": req.patient_location or "Not specified",
         "doctor_name": assigned_doctor["name"],
         "date_time": f"{dt.strftime('%A, %b %d, %Y')} at {req.start_time} - {req_end_str}",
         "service": req.service_type,
@@ -365,18 +368,19 @@ async def book_appointment(req: BookAppointmentRequest):
     # 3. Notify Staff via Telegram & Slack
     try:
         telegram = TelegramAdapter()
+        loc_str = f"\n📍 *Location:* {req.patient_location}" if req.patient_location else ""
         await telegram.send_message(
             f"📅 *NEW APPOINTMENT RESERVED!*\n\n"
             f"👤 *Patient:* {req.patient_name}\n"
             f"🩺 *Doctor:* {assigned_doctor['name']}\n"
             f"⏰ *Time:* {dt.strftime('%A, %b %d')} at {req.start_time} ({req.duration_mins} mins)\n"
             f"📧 *Email:* {req.patient_email}\n"
-            f"📞 *Phone:* {req.patient_phone or 'N/A'}\n"
+            f"📞 *Phone:* {req.patient_phone or 'N/A'}{loc_str}\n"
             f"🦷 *Service:* {req.service_type}"
         )
         slack = SlackAdapter()
         await slack.send_message(
-            text=f"📅 Confirmed Appointment: {req.patient_name} with {assigned_doctor['name']} on {dt.strftime('%A, %b %d')} at {req.start_time}"
+            text=f"📅 Confirmed Appointment: {req.patient_name} with {assigned_doctor['name']} on {dt.strftime('%A, %b %d')} at {req.start_time} (Location: {req.patient_location or 'N/A'})"
         )
     except Exception as e:
         logger.warning(f"Team messenger dispatch warning: {e}")
@@ -436,3 +440,41 @@ async def cancel_appointment(appointment_id: str):
 
     await execute("UPDATE appointments SET status = 'cancelled' WHERE id = ?", (appointment_id,))
     return {"status": "cancelled", "message": f"Appointment {appointment_id} for {app['patient_name']} has been cancelled and the slot is now open."}
+
+
+@router.get("/triage", dependencies=[Depends(verify_api_key)])
+async def get_clinical_triage(
+    symptoms: Optional[str] = Query(None),
+    date: Optional[str] = Query(None)
+):
+    """
+    Evaluate symptoms against clinical severity triage rules, match specialist doctors,
+    and return live available slot pills from database for that date.
+    """
+    from app.agent.tools import classify_clinical_severity
+    triage = classify_clinical_severity(symptoms or "")
+
+    target_date = date if (date and isinstance(date, str)) else "2026-10-31"
+    slots_data = await get_daily_slots(date=target_date)
+
+    # Filter recommended doctors based on severity
+    rec_ids = set(triage["recommended_doctors"])
+    recommended_list = [d for d in slots_data["doctors"] if d["doctor_id"] in rec_ids]
+    if not recommended_list:
+        recommended_list = slots_data["doctors"]
+
+    return {
+        "symptoms": symptoms,
+        "date": target_date,
+        "day_name": slots_data["day_name"],
+        "severity": triage["severity"],
+        "severity_label": triage["severity_label"],
+        "badge": triage["badge"],
+        "color": triage["color"],
+        "guidance": triage["guidance"],
+        "recommended_doctor_ids": triage["recommended_doctors"],
+        "recommended_doctors": recommended_list,
+        "all_doctors": slots_data["doctors"],
+        "timeline": slots_data["timeline"]
+    }
+

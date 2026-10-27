@@ -235,6 +235,7 @@ async def init_db():
             patient_name TEXT NOT NULL,
             patient_email TEXT NOT NULL,
             patient_phone TEXT,
+            patient_location TEXT,
             appointment_date TEXT NOT NULL,
             start_time TEXT NOT NULL,
             end_time TEXT NOT NULL,
@@ -245,6 +246,16 @@ async def init_db():
             created_at TEXT NOT NULL
         );
         """)
+
+        # Auto-migrate columns if table previously created without them
+        for col_sql in [
+            "ALTER TABLE leads ADD COLUMN patient_location TEXT",
+            "ALTER TABLE appointments ADD COLUMN patient_location TEXT"
+        ]:
+            try:
+                await conn.execute(col_sql)
+            except Exception:
+                pass
 
         # Seed initial brightsmile tenant and inventory
         now_iso = datetime.now(timezone.utc).isoformat()

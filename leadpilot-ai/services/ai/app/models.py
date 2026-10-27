@@ -46,6 +46,7 @@ class ChatResponse(BaseModel):
     lead_captured: Optional[Dict[str, Any]] = None
     handoff: bool = False
     conversation_id: str
+    scheduling_card: Optional[Dict[str, Any]] = None
 
 
 # Knowledge Base

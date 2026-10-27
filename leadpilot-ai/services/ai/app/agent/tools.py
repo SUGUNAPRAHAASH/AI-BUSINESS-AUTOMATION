@@ -28,18 +28,72 @@ def clean_patient_name(raw_name: Optional[str]) -> Optional[str]:
     return cleaned if len(cleaned) >= 2 else None
 
 
+def classify_clinical_severity(text: str) -> Dict[str, Any]:
+    """
+    Classify clinical symptoms or user inquiries into severity categories and match specialist doctors.
+    """
+    t = (text or "").lower()
+    # Level 1: Urgent / Emergency
+    if any(k in t for k in ["pain", "severe", "emergency", "bleed", "bleeding", "swelling", "swollen", "broken", "toothache", "trauma", "abscess", "wisdom tooth", "fell", "knocked", "unbearable", "urgent", "ache"]):
+        return {
+            "severity": "urgent",
+            "severity_label": "High Urgency / Acute Care",
+            "color": "#ef4444",
+            "badge": "🚨 Urgent / Pain",
+            "priority": 1,
+            "recommended_doctors": ["doc-sarah", "doc-marcus"],
+            "guidance": "Priority triage: Fast-track consultation with Dr. Sarah Mitchell (Lead Dental Surgeon) or Dr. Marcus Vance in Operatory 1/4. For uncontrollable bleeding, call 24/7 hotline (555) 019-9000."
+        }
+    # Level 2: Orthodontics & Clear Aligners
+    if any(k in t for k in ["invisalign", "braces", "aligner", "straighten", "gap", "crooked", "overbite", "underbite", "crossbite", "bite", "retainer", "orthodontic", "crowding"]):
+        return {
+            "severity": "orthodontic",
+            "severity_label": "Specialized Orthodontics",
+            "color": "#0284c7",
+            "badge": "🦷 Orthodontics & Aligners",
+            "priority": 2,
+            "recommended_doctors": ["doc-alex"],
+            "guidance": "Specialist referral: Dr. Alex Rivera, DMD in Operatory 2 for 3D iTero digital scanning and custom aligner treatment."
+        }
+    # Level 3: Cosmetic & Aesthetic Smile Design
+    if any(k in t for k in ["whiten", "whitening", "veneer", "bonding", "stain", "yellow", "cosmetic", "smile", "aesthetic", "porcelain", "lumineer"]):
+        return {
+            "severity": "cosmetic",
+            "severity_label": "Cosmetic Smile Enhancement",
+            "color": "#10b981",
+            "badge": "✨ Cosmetic & Whitening",
+            "priority": 3,
+            "recommended_doctors": ["doc-priya"],
+            "guidance": "Cosmetic consultation: Dr. Priya Patel, BDS in Operatory 3 for shade assessment, laser whitening, or porcelain veneer evaluation."
+        }
+    # Level 4: Routine & Preventive Care
+    return {
+        "severity": "routine",
+        "severity_label": "Routine & Preventive Care",
+        "color": "#0d9488",
+        "badge": "🩺 Routine & Checkup",
+        "priority": 4,
+        "recommended_doctors": ["doc-sarah", "doc-marcus"],
+        "guidance": "Comprehensive 30-minute exam, gentle hygiene cleaning, and digital preventive diagnostics with Dr. Sarah Mitchell or Dr. Marcus Vance."
+    }
+
+
 async def capture_lead(
     tenant_id: str,
     conversation_id: Optional[str] = None,
     name: Optional[str] = None,
     email: Optional[str] = None,
     phone: Optional[str] = None,
+    location: Optional[str] = None,
     interest: Optional[str] = None,
     budget_text: Optional[str] = None,
     timeline_text: Optional[str] = None,
-    source: str = "chat"
+    source: str = "chat",
+    doctor_id: Optional[str] = None,
+    appointment_date: Optional[str] = None,
+    appointment_time: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Capture or update a qualified prospective patient lead."""
+    """Capture or update a qualified prospective patient lead with strict clinical intake validation."""
     now_iso = datetime.now(timezone.utc).isoformat()
     name = clean_patient_name(name)
 
@@ -47,25 +101,26 @@ async def capture_lead(
     existing = None
     if conversation_id:
         existing = await fetch_one(
-            "SELECT id, name, email, phone, crm_id FROM leads WHERE tenant_id = ? AND conversation_id = ? ORDER BY created_at DESC LIMIT 1",
+            "SELECT id, name, email, phone, patient_location, crm_id FROM leads WHERE tenant_id = ? AND conversation_id = ? ORDER BY created_at DESC LIMIT 1",
             (tenant_id, conversation_id)
         )
     if not existing and email:
         existing = await fetch_one(
-            "SELECT id, name, email, phone, crm_id FROM leads WHERE tenant_id = ? AND lower(email) = lower(?) LIMIT 1",
+            "SELECT id, name, email, phone, patient_location, crm_id FROM leads WHERE tenant_id = ? AND lower(email) = lower(?) LIMIT 1",
             (tenant_id, email)
         )
     if not existing and phone:
         existing = await fetch_one(
-            "SELECT id, name, email, phone, crm_id FROM leads WHERE tenant_id = ? AND phone = ? LIMIT 1",
+            "SELECT id, name, email, phone, patient_location, crm_id FROM leads WHERE tenant_id = ? AND phone = ? LIMIT 1",
             (tenant_id, phone)
         )
 
-    # Merge with previous values if this turn only added contact details
+    # Merge with previous values if this turn only added partial contact details
     if existing:
         name = name or existing.get("name")
         email = email or existing.get("email")
         phone = phone or existing.get("phone")
+        location = location or existing.get("patient_location")
 
     # Determine lead score
     has_contact = bool(email or phone)
@@ -82,7 +137,8 @@ async def capture_lead(
         score = "cold"
         reason = "General inquiry with no contact info or timeline provided."
 
-    summary = f"Patient {name or 'Visitor'} inquiring about {interest or 'treatments'} (Budget: {budget_text or 'standard'}, Timeline: {timeline_text or 'unspecified'})."
+    loc_str = f" [Location: {location}]" if location else ""
+    summary = f"Patient {name or 'Visitor'}{loc_str} inquiring about {interest or 'treatments'} (Budget: {budget_text or 'standard'}, Timeline: {timeline_text or 'unspecified'})."
     next_action = "Schedule initial 3D consultation scan with treatment coordinator." if score == "hot" else "Send informational brochure."
 
     lead_id = str(uuid.uuid4())
@@ -90,16 +146,16 @@ async def capture_lead(
         lead_id = existing["id"]
         await execute(
             "UPDATE leads SET name = COALESCE(?, name), email = COALESCE(?, email), phone = COALESCE(?, phone), "
-            "interest = COALESCE(?, interest), budget_text = COALESCE(?, budget_text), "
-            "timeline_text = COALESCE(?, timeline_text), score = ?, score_reason = ?, "
-            "summary = ?, updated_at = ? WHERE id = ?",
-            (name, email, phone, interest, budget_text, timeline_text, score, reason[:200], summary[:300], now_iso, lead_id)
+            "patient_location = COALESCE(?, patient_location), interest = COALESCE(?, interest), "
+            "budget_text = COALESCE(?, budget_text), timeline_text = COALESCE(?, timeline_text), "
+            "score = ?, score_reason = ?, summary = ?, updated_at = ? WHERE id = ?",
+            (name, email, phone, location, interest, budget_text, timeline_text, score, reason[:200], summary[:300], now_iso, lead_id)
         )
     else:
         await execute(
-            "INSERT INTO leads (id, tenant_id, conversation_id, name, email, phone, interest, budget_text, timeline_text, score, score_reason, summary, source, status, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', ?, ?)",
-            (lead_id, tenant_id, conversation_id, name, email, phone, interest, budget_text, timeline_text, score, reason[:200], summary[:300], source, now_iso, now_iso)
+            "INSERT INTO leads (id, tenant_id, conversation_id, name, email, phone, patient_location, interest, budget_text, timeline_text, score, score_reason, summary, source, status, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', ?, ?)",
+            (lead_id, tenant_id, conversation_id, name, email, phone, location, interest, budget_text, timeline_text, score, reason[:200], summary[:300], source, now_iso, now_iso)
         )
 
     result = {
@@ -107,6 +163,7 @@ async def capture_lead(
         "name": name,
         "email": email,
         "phone": phone,
+        "location": location,
         "interest": interest,
         "budget_text": budget_text,
         "timeline_text": timeline_text,
@@ -116,18 +173,18 @@ async def capture_lead(
         "next_best_action": next_action
     }
 
-    # Only dispatch real-time team alerts (Telegram & Slack) when contact details are present,
-    # and avoid duplicate pings if an alert was already sent for this patient
+    # Real-time team notifications (Telegram & Slack) when contact details are present
     already_alerted = bool(existing and (existing.get("email") or existing.get("phone")))
 
     if has_contact and not already_alerted:
         from app.integrations.telegram import TelegramAdapter
         telegram = TelegramAdapter()
+        loc_display = f"\n📍 *Location:* {location}" if location else ""
         await telegram.send_message(
-            f"🚨 *NEW PATIENT LEAD CAPTURED!*\n\n"
+            f"🚨 *NEW PATIENT INTAKE INQUIRY!*\n\n"
             f"👤 *Name:* {name or 'Visitor'}\n"
             f"📧 *Email:* {email or 'N/A'}\n"
-            f"📞 *Phone:* {phone or 'N/A'}\n"
+            f"📞 *Phone:* {phone or 'N/A'}{loc_display}\n"
             f"🦷 *Interest:* {interest or 'General Appointment'}\n"
             f"📊 *Score:* {score.upper()}\n"
             f"📝 *Summary:* {summary[:200]}"
@@ -136,11 +193,11 @@ async def capture_lead(
         from app.integrations.slack import SlackAdapter
         slack = SlackAdapter()
         await slack.send_message(
-            text=f"🚨 New Patient Lead: {name or 'Visitor'} ({score.upper()})",
+            text=f"🚨 New Patient Intake: {name or 'Visitor'} ({score.upper()})",
             blocks=[
                 {
                     "type": "header",
-                    "text": {"type": "plain_text", "text": "🚨 New Patient Lead Captured"}
+                    "text": {"type": "plain_text", "text": "🚨 New Patient Intake Registered"}
                 },
                 {
                     "type": "section",
@@ -149,8 +206,8 @@ async def capture_lead(
                         {"type": "mrkdwn", "text": f"*Score:* {score.upper()}"},
                         {"type": "mrkdwn", "text": f"*Email:* {email or 'N/A'}"},
                         {"type": "mrkdwn", "text": f"*Phone:* {phone or 'N/A'}"},
-                        {"type": "mrkdwn", "text": f"*Interest:* {interest or 'General'}"},
-                        {"type": "mrkdwn", "text": f"*Timeline:* {timeline_text or 'Soon'}"}
+                        {"type": "mrkdwn", "text": f"*Location:* {location or 'N/A'}"},
+                        {"type": "mrkdwn", "text": f"*Interest:* {interest or 'General'}"}
                     ]
                 }
             ]
@@ -160,9 +217,10 @@ async def capture_lead(
         airtable = AirtableAdapter()
         await airtable.create_record(fields={
             "Name": f"{name or 'Visitor'} (Score: {score.upper()})",
-            "Notes": f"Email: {email or 'N/A'} | Phone: {phone or 'N/A'} | Interest: {interest or 'General'} | {summary[:200]}"
+            "Notes": f"Email: {email or 'N/A'} | Phone: {phone or 'N/A'} | Location: {location or 'N/A'} | Interest: {interest or 'General'} | {summary[:200]}"
         })
-    # Dispatch real HubSpot contact
+
+    # HubSpot integration
     try:
         from app.integrations.hubspot import HubSpotAdapter
         hubspot = HubSpotAdapter()
@@ -181,51 +239,48 @@ async def capture_lead(
     except Exception as e:
         logger.error(f"HubSpot dispatch error: {e}")
 
-    # Dispatch TWO distinct emails:
-    # 1. Hospital Administration Alert to prahaashnms18@gmail.com
-    # 2. Patient Confirmation to patient's entered email
+    # Dispatch Hospital Administration Alert to prahaashnms18@gmail.com
+    # STRICT RULE: ONLY the Hospital Alert arrives at prahaashnms18@gmail.com!
     try:
         from app.integrations.gmail import EmailAdapter
         emailer = EmailAdapter()
 
-        # Always notify hospital side (prahaashnms18@gmail.com)
+        triage_info = classify_clinical_severity(interest or summary)
+
         await emailer.send_hospital_intake_alert({
-            "name": name,
-            "email": email,
-            "phone": phone,
-            "doctor_name": "Dr. Sarah Mitchell, DDS",
-            "date_time": timeline_text or "Saturday at 11:00 AM",
+            "name": name or "Prospective Patient",
+            "email": email or "Not provided",
+            "phone": phone or "Not provided",
+            "patient_location": location or "Not specified",
+            "doctor_name": doctor_id or triage_info["recommended_doctors"][0],
+            "date_time": f"{appointment_date} at {appointment_time}" if (appointment_date and appointment_time) else (timeline_text or "Intake Lead / Schedule Selection In Progress"),
             "service": interest or "Basic Consultation (30 mins)",
             "score": score,
-            "notes": summary
+            "notes": f"Triage: {triage_info['severity_label']} | {summary}"
         })
-
-        # Send patient confirmation if valid email provided
-        if email and "@" in email and "example.com" not in email and "patient.brightsmiledental.com" not in email:
-            await emailer.send_patient_confirmation(
-                to_addr=email,
-                data={
-                    "name": name or "Valued Patient",
-                    "doctor_name": "Dr. Sarah Mitchell, DDS",
-                    "date_time": timeline_text or "Saturday at 11:00 AM",
-                    "service": interest or "Basic Consultation (30 mins)",
-                    "phone": phone or "On file"
-                }
-            )
     except Exception as e:
-        logger.error(f"Dual email dispatch error: {e}")
+        logger.error(f"Hospital email dispatch error: {e}")
 
-    # Register into practice appointments table if date/time present
-    if (timeline_text and any(k in timeline_text.lower() for k in ["saturday", "monday", "am", "pm", "nov", "oct", "11"])) and (email or phone):
+    # If the user explicitly provided complete appointment parameters, reserve it atomically:
+    if appointment_date and appointment_time and (email or phone):
         try:
-            app_id = str(uuid.uuid4())
-            await execute(
-                "INSERT INTO appointments (id, tenant_id, doctor_id, doctor_name, patient_name, patient_email, patient_phone, appointment_date, start_time, end_time, duration_mins, service_type, status, notes, created_at) "
-                "VALUES (?, ?, 'doc-sarah', 'Dr. Sarah Mitchell, DDS', ?, ?, ?, '2026-10-31', '11:00', '11:30', 30, ?, 'confirmed', ?, ?)",
-                (app_id, tenant_id, name or "New Patient", email or "intake@brightsmile.com", phone, interest or "Basic Dental Consultation (30 mins)", f"Booked via AI Chatbot: {timeline_text}", now_iso)
+            from app.routers.schedule import book_appointment, BookAppointmentRequest
+            req = BookAppointmentRequest(
+                doctor_id=doctor_id,
+                patient_name=name or "Valued Patient",
+                patient_email=email or "patient@brightsmile.com",
+                patient_phone=phone,
+                patient_location=location,
+                appointment_date=appointment_date,
+                start_time=appointment_time,
+                duration_mins=30,
+                service_type=interest or "Basic Consultation (30 mins)",
+                notes=f"Reserved via AI conversation: {summary}"
             )
+            booking_res = await book_appointment(req)
+            result["appointment_booked"] = booking_res
         except Exception as e:
-            logger.warning(f"Auto appointment registration note: {e}")
+            logger.warning(f"Explicit booking note: {e}")
 
     if score == "hot":
         await insert_mock_outbox("slack", "hot_lead_alert", {
@@ -233,6 +288,7 @@ async def capture_lead(
             "lead_id": lead_id,
             "name": name,
             "email": email,
+            "location": location,
             "interest": interest,
             "score": score
         })
