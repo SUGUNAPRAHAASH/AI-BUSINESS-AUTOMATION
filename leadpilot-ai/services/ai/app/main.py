@@ -17,8 +17,10 @@ from app.routers import (
     webhooks_router,
     reports_router,
     admin_router,
+    schedule_router,
 )
 from app.utils.logging import logger
+
 
 
 @asynccontextmanager
@@ -135,3 +137,5 @@ app.include_router(documents_router)
 app.include_router(webhooks_router)
 app.include_router(reports_router)
 app.include_router(admin_router)
+app.include_router(schedule_router)
+

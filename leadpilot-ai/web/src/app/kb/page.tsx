@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BookOpen, Search, RefreshCw, CheckCircle, FileText } from "lucide-react";
+import { BookOpen, Search, RefreshCw, CheckCircle, FileText, Sparkles } from "lucide-react";
 
 export default function KnowledgeBasePage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -48,111 +48,108 @@ export default function KnowledgeBasePage() {
   }
 
   return (
-    <div className="p-8 max-w-7xl mx-auto w-full space-y-8">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto w-full space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-6">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-            <BookOpen className="h-6 w-6 text-teal-400" />
-            Knowledge Base Management
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-teal-50 text-teal-800 border border-teal-200">
+              Practice RAG Context
+            </span>
+            <span className="text-xs text-slate-500 font-medium hidden sm:inline">Grounded Vector Embeddings</span>
+          </div>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight mt-1 flex items-center gap-2.5">
+            <BookOpen className="h-7 w-7 text-teal-600" />
+            Clinical Knowledge Base
           </h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Grounded vector chunks and hybrid search index for BrightSmile Dental
+          <p className="text-sm text-slate-500 mt-1">
+            Grounded clinical facts, fee schedules, doctor hours, and hybrid semantic retrieval.
           </p>
         </div>
 
         <button
           onClick={triggerReingest}
           disabled={ingesting}
-          className="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white font-medium text-xs flex items-center gap-2 transition-all shadow-md shadow-teal-600/20"
+          className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-semibold text-xs flex items-center gap-2 shadow-xs transition-colors self-start sm:self-auto"
         >
           <RefreshCw className={`h-4 w-4 ${ingesting ? "animate-spin" : ""}`} />
-          <span>{ingesting ? "Re-Ingesting..." : "Re-Ingest All Documents"}</span>
+          <span>{ingesting ? "Re-Indexing..." : "Re-Index Knowledge Base"}</span>
         </button>
       </div>
 
       {ingestMessage && (
-        <div className="p-4 rounded-xl bg-emerald-950/60 border border-emerald-500/30 text-xs text-emerald-300 flex items-center gap-2">
-          <CheckCircle className="h-4 w-4 text-emerald-400 shrink-0" />
+        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-900 flex items-center gap-2 shadow-2xs">
+          <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0" />
           <span>{ingestMessage}</span>
         </div>
       )}
 
-      {/* Documents Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      {/* Search Input */}
+      <form onSubmit={handleSearch} className="flex gap-2">
+        <div className="relative flex-1">
+          <Search className="h-4 w-4 absolute left-4 top-3.5 text-slate-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Test semantic search across practice facts (e.g. Saturday hours, veneers pricing, emergency)..."
+            className="w-full bg-white border border-slate-200 rounded-xl pl-11 pr-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-teal-500 shadow-2xs"
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={searching}
+          className="px-5 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition-colors shadow-2xs"
+        >
+          {searching ? "Searching..." : "Search RAG"}
+        </button>
+      </form>
+
+      {/* Semantic Search Results */}
+      {searchResults.length > 0 && (
+        <div className="p-6 rounded-2xl bg-white border border-teal-200 shadow-xs space-y-3">
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-teal-600" />
+            Top Retrieved Chunks ({searchResults.length})
+          </h3>
+          <div className="space-y-2.5">
+            {searchResults.map((r, i) => (
+              <div key={i} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-900">{r.title}</span>
+                  <span className="text-teal-700 font-semibold text-[11px]">Score: {r.score?.toFixed(3)}</span>
+                </div>
+                <p className="text-slate-600 leading-relaxed">{r.content}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Grounded Practice Documents Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {kbDocs.map((doc, idx) => (
           <div
             key={idx}
-            className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 flex flex-col justify-between space-y-4 hover:border-slate-700 transition-colors"
+            className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3 hover:border-slate-300 transition-colors"
           >
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] font-semibold text-teal-400 uppercase tracking-wide">
-                  {doc.category}
-                </span>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono">
-                  {doc.chunks} Chunks
-                </span>
-              </div>
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <FileText className="h-4 w-4 text-slate-400" />
-                {doc.title}
-              </h3>
-              <p className="text-xs font-mono text-slate-500 mt-1">{doc.source}</p>
+            <div className="flex items-center justify-between">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-teal-50 text-teal-800 border border-teal-200">
+                {doc.category}
+              </span>
+              <span className="text-xs text-slate-400 font-medium">{doc.chunks} chunks</span>
             </div>
-            <div className="pt-3 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-400">
-              <span>Embedding Dim: 768</span>
-              <span className="text-emerald-400 font-medium">HNSW Indexed</span>
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-xl bg-slate-100 text-slate-700 shrink-0">
+                <FileText className="h-5 w-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-900">{doc.title}</h4>
+                <p className="text-xs text-slate-500 font-mono mt-0.5">{doc.source}</p>
+              </div>
             </div>
           </div>
         ))}
-      </div>
-
-      {/* Live Retrieval Tester */}
-      <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-4">
-        <div>
-          <h3 className="text-base font-bold text-white">Interactive Hybrid Retrieval Query Tester</h3>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Test vector cosine + BM25 keyword Reciprocal Rank Fusion against current database chunks
-          </p>
-        </div>
-
-        <form onSubmit={handleSearch} className="flex gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-slate-500" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="e.g. How much is teeth whitening and Saturday hours?"
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-teal-500"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={searching || !searchQuery.trim()}
-            className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-medium text-xs disabled:opacity-50"
-          >
-            {searching ? "Searching..." : "Test Query"}
-          </button>
-        </form>
-
-        {searchResults.length > 0 && (
-          <div className="space-y-3 pt-2">
-            <span className="text-xs font-semibold text-slate-400">Top Retrieved Chunks (RRF Ranked):</span>
-            <div className="space-y-2">
-              {searchResults.map((r, i) => (
-                <div key={i} className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5 text-xs">
-                  <div className="flex items-center justify-between font-semibold">
-                    <span className="text-teal-400">{r.title} ({r.source})</span>
-                    <span className="font-mono text-slate-400">RRF Score: {r.score}</span>
-                  </div>
-                  <p className="text-slate-300 whitespace-pre-wrap leading-relaxed">{r.content}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

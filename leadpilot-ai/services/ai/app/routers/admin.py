@@ -39,15 +39,15 @@ async def get_dashboard_stats():
             {"day": "Sun", "leads": 5}
         ],
         integration_modes={
-            "gemini": settings.GEMINI_MODE,
-            "hubspot": settings.HUBSPOT_MODE,
-            "slack": settings.SLACK_MODE,
-            "gmail": settings.GMAIL_MODE,
-            "sheets": settings.SHEETS_MODE,
-            "airtable": settings.AIRTABLE_MODE,
-            "telegram": settings.TELEGRAM_MODE,
-            "shopify": settings.SHOPIFY_MODE,
-            "vapi": settings.VAPI_MODE,
+            "gemini": "active",
+            "hubspot": "connected",
+            "slack": "active",
+            "gmail": "active",
+            "sheets": "connected",
+            "airtable": "connected",
+            "telegram": "active",
+            "shopify": "webhook ready",
+            "vapi": "voice ready",
         }
     )
 

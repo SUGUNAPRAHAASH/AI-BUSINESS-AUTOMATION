@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Users, Filter, RefreshCw, X, CheckCircle, Mail, Phone, Calendar, ArrowRight } from "lucide-react";
+import { Users, Filter, RefreshCw, X, CheckCircle, Mail, Phone, Calendar, ArrowRight, ShieldCheck } from "lucide-react";
 
 interface Lead {
   id: string;
@@ -60,26 +60,32 @@ export default function LeadsPage() {
   }
 
   return (
-    <div className="p-8 max-w-7xl mx-auto w-full space-y-6">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto w-full space-y-6">
       {/* Header & Filter Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-6">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-            <Users className="h-6 w-6 text-teal-400" />
-            Patient Leads CRM
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-teal-50 text-teal-800 border border-teal-200">
+              Patient Registry
+            </span>
+            <span className="text-xs text-slate-500 font-medium hidden sm:inline">HubSpot & Airtable Synced</span>
+          </div>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight mt-1 flex items-center gap-2.5">
+            <Users className="h-7 w-7 text-teal-600" />
+            Patient Leads & Consultation Requests
           </h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Autonomous qualification, scoring, and HubSpot CRM synchronization
+          <p className="text-sm text-slate-500 mt-1">
+            Real-time qualification, lead scoring, and live synchronization with HubSpot CRM.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs">
+          <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs shadow-2xs">
             <Filter className="h-3.5 w-3.5 text-slate-400" />
             <select
               value={filterScore}
               onChange={(e) => setFilterScore(e.target.value)}
-              className="bg-transparent text-white focus:outline-none cursor-pointer"
+              className="bg-transparent text-slate-800 font-semibold focus:outline-none cursor-pointer"
             >
               <option value="">All Scores</option>
               <option value="hot">Hot Only</option>
@@ -90,7 +96,8 @@ export default function LeadsPage() {
 
           <button
             onClick={() => loadLeads()}
-            className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 transition-colors"
+            className="p-2 rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors shadow-2xs"
+            title="Refresh Leads"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </button>
@@ -98,10 +105,10 @@ export default function LeadsPage() {
       </div>
 
       {/* Leads Table */}
-      <div className="rounded-2xl bg-slate-900/60 border border-slate-800 overflow-hidden shadow-sm">
+      <div className="rounded-2xl bg-white border border-slate-200 overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-950/80 text-xs uppercase tracking-wider text-slate-400 border-b border-slate-800 font-semibold">
+            <thead className="bg-slate-50/80 text-xs uppercase tracking-wider text-slate-500 border-b border-slate-200 font-bold">
               <tr>
                 <th className="p-4 pl-6">Patient</th>
                 <th className="p-4">Treatment Interest</th>
@@ -111,10 +118,10 @@ export default function LeadsPage() {
                 <th className="p-4 pr-6 text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60">
+            <tbody className="divide-y divide-slate-100">
               {leads.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-slate-500">
+                  <td colSpan={6} className="p-12 text-center text-slate-400">
                     No patient leads found matching criteria.
                   </td>
                 </tr>
@@ -123,49 +130,46 @@ export default function LeadsPage() {
                   <tr
                     key={l.id}
                     onClick={() => setSelectedLead(l)}
-                    className="hover:bg-slate-800/40 cursor-pointer transition-colors"
+                    className="hover:bg-slate-50/80 cursor-pointer transition-colors"
                   >
                     <td className="p-4 pl-6">
-                      <div className="font-semibold text-white">{l.name || "Anonymous Visitor"}</div>
-                      <div className="text-xs text-slate-400">{l.email || l.phone || "No direct contact"}</div>
+                      <div className="font-bold text-slate-900">{l.name || "Valued Visitor"}</div>
+                      <div className="text-xs text-slate-500">{l.email || l.phone || "No direct contact"}</div>
                     </td>
-                    <td className="p-4 text-slate-300 font-medium">
-                      {l.interest || "General Inquiry"}
+                    <td className="p-4 text-slate-700 font-semibold">
+                      {l.interest || "General Consultation"}
                     </td>
                     <td className="p-4">
                       <span
-                        className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide ${
+                        className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${
                           l.score === "hot"
-                            ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                            ? "bg-rose-50 text-rose-700 border border-rose-200"
                             : l.score === "warm"
-                            ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                            : "bg-slate-800 text-slate-400"
+                            ? "bg-amber-50 text-amber-700 border border-amber-200"
+                            : "bg-slate-100 text-slate-600"
                         }`}
                       >
                         {l.score}
                       </span>
                     </td>
-                    <td className="p-4 text-xs text-slate-400">
-                      <div>{l.timeline_text || "Flexible"}</div>
-                      <div className="text-slate-500">{l.budget_text || "Standard fee"}</div>
+                    <td className="p-4 text-xs text-slate-600">
+                      <div>{l.timeline_text || "Soon"}</div>
+                      <div className="text-[11px] text-slate-400">{l.budget_text || "Standard"}</div>
                     </td>
                     <td className="p-4">
-                      <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
-                        <CheckCircle className="h-3.5 w-3.5" />
-                        {l.crm_id ? "HubSpot Synced" : "CRM Synced"}
-                      </span>
+                      {l.crm_id ? (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                          <CheckCircle className="h-3 w-3 text-emerald-600" />
+                          <span>HubSpot #{l.crm_id.slice(-6)}</span>
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400">Local Synced</span>
+                      )}
                     </td>
                     <td className="p-4 pr-6 text-right">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedLead(l);
-                        }}
-                        className="text-xs text-teal-400 hover:text-teal-300 font-medium inline-flex items-center gap-1"
-                      >
-                        <span>View</span>
-                        <ArrowRight className="h-3 w-3" />
-                      </button>
+                      <span className="text-xs font-semibold text-teal-600 hover:text-teal-700 inline-flex items-center gap-1">
+                        View Details <ArrowRight className="h-3 w-3" />
+                      </span>
                     </td>
                   </tr>
                 ))
@@ -175,82 +179,78 @@ export default function LeadsPage() {
         </div>
       </div>
 
-      {/* Detail Slide-over Drawer */}
+      {/* Selected Lead Drawer Modal */}
       {selectedLead && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/60 backdrop-blur-sm">
-          <div className="w-full max-w-lg bg-slate-900 border-l border-slate-800 p-6 flex flex-col justify-between shadow-2xl overflow-y-auto">
-            <div className="space-y-6">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6 border border-slate-200 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">{selectedLead.name || "Patient Record"}</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Lead ID: {selectedLead.id}</p>
+              </div>
+              <button
+                onClick={() => setSelectedLead(null)}
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
                 <div>
-                  <h2 className="text-lg font-bold text-white">Lead Intelligence Detail</h2>
-                  <p className="text-xs text-slate-400 font-mono mt-0.5">ID: {selectedLead.id}</p>
+                  <span className="text-slate-500 block">Email Address</span>
+                  <span className="font-bold text-slate-900">{selectedLead.email || "N/A"}</span>
                 </div>
-                <button
-                  onClick={() => setSelectedLead(null)}
-                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white"
-                >
-                  <X className="h-5 w-5" />
-                </button>
+                <div>
+                  <span className="text-slate-500 block">Phone</span>
+                  <span className="font-bold text-slate-900">{selectedLead.phone || "N/A"}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">Treatment Interest</span>
+                  <span className="font-bold text-teal-700">{selectedLead.interest || "General Consultation"}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">Lead Qualification Score</span>
+                  <span className="font-bold uppercase text-slate-900">{selectedLead.score}</span>
+                </div>
               </div>
 
-              {/* Status & Name */}
-              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
-                <div>
-                  <div className="text-base font-bold text-white">{selectedLead.name || "Anonymous Patient"}</div>
-                  <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-3">
-                    {selectedLead.email && (
-                      <span className="flex items-center gap-1"><Mail className="h-3 w-3 text-teal-400" /> {selectedLead.email}</span>
-                    )}
-                    {selectedLead.phone && (
-                      <span className="flex items-center gap-1"><Phone className="h-3 w-3 text-teal-400" /> {selectedLead.phone}</span>
-                    )}
-                  </div>
-                </div>
-                <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-rose-500/10 text-rose-400 border border-rose-500/20">
-                  {selectedLead.score}
-                </span>
+              <div>
+                <span className="font-bold text-slate-700 block mb-1">Scoring Rationale</span>
+                <p className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-700">
+                  {selectedLead.score_reason}
+                </p>
               </div>
 
-              {/* Score Reason & AI Summary */}
-              <div className="space-y-3">
-                <div>
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">AI Scoring Rubric Reason</label>
-                  <p className="text-sm text-slate-200 mt-1 p-3 rounded-lg bg-slate-950 border border-slate-800">
-                    {selectedLead.score_reason}
-                  </p>
-                </div>
+              <div>
+                <span className="font-bold text-slate-700 block mb-1">Clinical Summary</span>
+                <p className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-700">
+                  {selectedLead.summary}
+                </p>
+              </div>
 
-                <div>
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Clinical Summary</label>
-                  <p className="text-sm text-slate-200 mt-1 p-3 rounded-lg bg-slate-950 border border-slate-800 leading-relaxed">
-                    {selectedLead.summary}
-                  </p>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Recommended Next Best Action</label>
-                  <div className="text-sm text-teal-300 font-medium mt-1 p-3 rounded-lg bg-teal-950/40 border border-teal-500/30">
-                    {selectedLead.next_best_action}
-                  </div>
-                </div>
+              <div>
+                <span className="font-bold text-slate-700 block mb-1">Recommended Next Step</span>
+                <p className="p-3 rounded-xl bg-teal-50 border border-teal-200 text-teal-900 font-semibold">
+                  {selectedLead.next_best_action}
+                </p>
               </div>
             </div>
 
-            {/* Actions */}
-            <div className="pt-6 border-t border-slate-800 flex gap-3">
+            <div className="pt-2 flex gap-3">
+              <button
+                onClick={() => setSelectedLead(null)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 font-semibold text-xs text-slate-600 hover:bg-slate-50"
+              >
+                Close
+              </button>
               <button
                 disabled={syncing}
                 onClick={() => triggerFollowup(selectedLead.id)}
-                className="flex-1 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-medium text-sm flex items-center justify-center gap-2 transition-all shadow-md shadow-teal-600/20 disabled:opacity-50"
+                className="flex-1 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs shadow-xs"
               >
-                <Mail className="h-4 w-4" />
-                <span>{syncing ? "Sending..." : "Dispatch Follow-up Email"}</span>
-              </button>
-              <button
-                onClick={() => setSelectedLead(null)}
-                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium"
-              >
-                Close
+                {syncing ? "Dispatching..." : "Send Follow-Up Intimation"}
               </button>
             </div>
           </div>

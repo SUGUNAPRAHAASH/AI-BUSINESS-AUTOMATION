@@ -9,6 +9,17 @@
 - **Saturday:** 9:00 to 14:00 (Saturday hours: 9:00 to 14:00 for hygiene appointments, consultations, and urgent visits)
 - **Sunday:** Closed (Emergency on-call line active for registered patients)
 
+## Doctor Roster & 30-Minute Consultation Architecture
+Each consultation is scheduled in dedicated 30-minute intervals (or 45-60 minutes for specialized orthodontic/implant procedures). Doctors have dedicated operatories and CANNOT be double-booked at the same time:
+- **Dr. Sarah Mitchell, DDS (Lead Dental Surgeon & General Consultation):** Operatory 1. Mon-Wed (08:30-17:00), Fri (08:30-16:30), Sat (09:00-13:00).
+- **Dr. Alex Rivera, DMD (Senior Orthodontist & Invisalign Specialist):** Operatory 2. Tue & Thu (09:30-18:00), Sat (10:00-15:00).
+- **Dr. Priya Patel, BDS (Cosmetic Dentistry & Veneers):** Operatory 3. Mon, Wed, Thu (09:00-16:30), Fri (09:00-14:00).
+- **Dr. Marcus Vance, DDS (Pediatric & Family Care):** Operatory 4. Tue, Wed, Fri (09:00-17:00), Sat (09:00-14:00).
+
+### Saturday Scheduling & Overlap Prevention:
+On Saturdays, multiple doctors are on duty simultaneously (Dr. Sarah Mitchell, Dr. Alex Rivera, and Dr. Marcus Vance). If Dr. Sarah Mitchell's 11:00 AM slot is reserved, patients can be scheduled at 11:00 AM with Dr. Alex Rivera or Dr. Marcus Vance, or book Dr. Sarah's subsequent 11:30 AM slot. Practice administration can adjust all schedules dynamically in the Admin Schedule Manager.
+
+
 ## Location & Parking
 - **Address:** 742 Evergreen Medical Suites, Suite 300, Springfield, NY 10001
 - **Parking:** Dedicated patient parking spots are free in the underground lot (validated at the reception desk).

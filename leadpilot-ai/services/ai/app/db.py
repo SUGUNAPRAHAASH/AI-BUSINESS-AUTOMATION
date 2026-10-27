@@ -202,6 +202,48 @@ async def init_db():
             ok INTEGER,
             created_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS doctors (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            title TEXT NOT NULL,
+            specialty TEXT NOT NULL,
+            cabin TEXT NOT NULL,
+            color TEXT NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS doctor_schedules (
+            id TEXT PRIMARY KEY,
+            doctor_id TEXT NOT NULL,
+            day_of_week INTEGER NOT NULL,
+            day_name TEXT NOT NULL,
+            start_time TEXT NOT NULL,
+            end_time TEXT NOT NULL,
+            lunch_start TEXT,
+            lunch_end TEXT,
+            slot_duration_mins INTEGER NOT NULL DEFAULT 30,
+            is_working INTEGER NOT NULL DEFAULT 1,
+            UNIQUE(doctor_id, day_of_week)
+        );
+
+        CREATE TABLE IF NOT EXISTS appointments (
+            id TEXT PRIMARY KEY,
+            tenant_id TEXT NOT NULL,
+            doctor_id TEXT NOT NULL,
+            doctor_name TEXT NOT NULL,
+            patient_name TEXT NOT NULL,
+            patient_email TEXT NOT NULL,
+            patient_phone TEXT,
+            appointment_date TEXT NOT NULL,
+            start_time TEXT NOT NULL,
+            end_time TEXT NOT NULL,
+            duration_mins INTEGER NOT NULL DEFAULT 30,
+            service_type TEXT NOT NULL DEFAULT 'Basic Consultation (30 mins)',
+            status TEXT NOT NULL DEFAULT 'confirmed',
+            notes TEXT,
+            created_at TEXT NOT NULL
+        );
         """)
 
         # Seed initial brightsmile tenant and inventory
@@ -216,6 +258,102 @@ async def init_db():
             json.dumps({"timezone": "America/New_York", "currency": "USD", "cancellation_notice_hours": 24}),
             now_iso
         ))
+
+        # Seed Doctors
+        doctors_data = [
+            ("doc-sarah", "Dr. Sarah Mitchell, DDS", "Lead Dental Surgeon", "General & Preventive Care", "Operatory 1 (West Wing)", "#0d9488"),
+            ("doc-alex", "Dr. Alex Rivera, DMD", "Senior Orthodontist", "Invisalign & Clear Aligners", "Operatory 2 (Orthodontics)", "#0284c7"),
+            ("doc-priya", "Dr. Priya Patel, BDS", "Cosmetic Specialist", "Veneers & Smile Restoration", "Operatory 3 (Aesthetics)", "#10b981"),
+            ("doc-marcus", "Dr. Marcus Vance, DDS", "Family Practitioner", "Pediatric & Dental Surgery", "Operatory 4 (East Wing)", "#6366f1"),
+        ]
+        for did, name, title, spec, cabin, color in doctors_data:
+            await conn.execute("""
+                INSERT OR IGNORE INTO doctors (id, name, title, specialty, cabin, color, is_active, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+            """, (did, name, title, spec, cabin, color, now_iso))
+
+        # Seed Doctor Schedules
+        day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        # Dr. Sarah: Mon-Wed, Fri, Sat
+        sarah_schedule = [
+            (0, "08:30", "17:00", "13:00", "14:00", 30, 1),
+            (1, "08:30", "17:00", "13:00", "14:00", 30, 1),
+            (2, "08:30", "17:00", "13:00", "14:00", 30, 1),
+            (3, "08:30", "17:00", "13:00", "14:00", 30, 0),
+            (4, "08:30", "16:30", "13:00", "14:00", 30, 1),
+            (5, "09:00", "13:00", None, None, 30, 1),
+            (6, "09:00", "13:00", None, None, 30, 0),
+        ]
+        for dow, start, end, ls, le, slot, is_w in sarah_schedule:
+            sid = f"sched-sarah-{dow}"
+            await conn.execute("""
+                INSERT OR IGNORE INTO doctor_schedules (id, doctor_id, day_of_week, day_name, start_time, end_time, lunch_start, lunch_end, slot_duration_mins, is_working)
+                VALUES (?, 'doc-sarah', ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (sid, dow, day_names[dow], start, end, ls, le, slot, is_w))
+
+        # Dr. Alex: Tue, Thu, Sat
+        alex_schedule = [
+            (0, "09:30", "18:00", "13:30", "14:30", 30, 0),
+            (1, "09:30", "18:00", "13:30", "14:30", 30, 1),
+            (2, "09:30", "18:00", "13:30", "14:30", 30, 0),
+            (3, "09:30", "18:00", "13:30", "14:30", 30, 1),
+            (4, "09:30", "18:00", "13:30", "14:30", 30, 0),
+            (5, "10:00", "15:00", "13:00", "13:30", 30, 1),
+            (6, "10:00", "15:00", None, None, 30, 0),
+        ]
+        for dow, start, end, ls, le, slot, is_w in alex_schedule:
+            sid = f"sched-alex-{dow}"
+            await conn.execute("""
+                INSERT OR IGNORE INTO doctor_schedules (id, doctor_id, day_of_week, day_name, start_time, end_time, lunch_start, lunch_end, slot_duration_mins, is_working)
+                VALUES (?, 'doc-alex', ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (sid, dow, day_names[dow], start, end, ls, le, slot, is_w))
+
+        # Dr. Priya: Mon, Wed, Thu, Fri
+        priya_schedule = [
+            (0, "09:00", "16:30", "12:30", "13:30", 30, 1),
+            (1, "09:00", "16:30", "12:30", "13:30", 30, 0),
+            (2, "09:00", "16:30", "12:30", "13:30", 30, 1),
+            (3, "09:00", "16:30", "12:30", "13:30", 30, 1),
+            (4, "09:00", "14:00", None, None, 30, 1),
+            (5, "09:00", "13:00", None, None, 30, 0),
+            (6, "09:00", "13:00", None, None, 30, 0),
+        ]
+        for dow, start, end, ls, le, slot, is_w in priya_schedule:
+            sid = f"sched-priya-{dow}"
+            await conn.execute("""
+                INSERT OR IGNORE INTO doctor_schedules (id, doctor_id, day_of_week, day_name, start_time, end_time, lunch_start, lunch_end, slot_duration_mins, is_working)
+                VALUES (?, 'doc-priya', ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (sid, dow, day_names[dow], start, end, ls, le, slot, is_w))
+
+        # Dr. Marcus: Tue, Wed, Fri, Sat
+        marcus_schedule = [
+            (0, "09:00", "17:00", "13:00", "14:00", 30, 0),
+            (1, "09:00", "17:00", "13:00", "14:00", 30, 1),
+            (2, "09:00", "17:00", "13:00", "14:00", 30, 1),
+            (3, "09:00", "17:00", "13:00", "14:00", 30, 0),
+            (4, "09:00", "17:00", "13:00", "14:00", 30, 1),
+            (5, "09:00", "14:00", "12:30", "13:00", 30, 1),
+            (6, "09:00", "14:00", None, None, 30, 0),
+        ]
+        for dow, start, end, ls, le, slot, is_w in marcus_schedule:
+            sid = f"sched-marcus-{dow}"
+            await conn.execute("""
+                INSERT OR IGNORE INTO doctor_schedules (id, doctor_id, day_of_week, day_name, start_time, end_time, lunch_start, lunch_end, slot_duration_mins, is_working)
+                VALUES (?, 'doc-marcus', ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (sid, dow, day_names[dow], start, end, ls, le, slot, is_w))
+
+        # Seed sample appointments demonstrating conflict prevention on Saturday
+        # Saturday at 11:00 AM with Dr. Sarah is booked by Emma Thompson
+        sample_apps = [
+            ("app-demo-1", "doc-sarah", "Dr. Sarah Mitchell, DDS", "Emma Thompson", "emma.t@example.com", "+1-555-019-3321", "2026-10-31", "11:00", "11:30", 30, "Basic Consultation (30 mins)", "confirmed", "Routine 6-month checkup"),
+            ("app-demo-2", "doc-alex", "Dr. Alex Rivera, DMD", "Liam Wilson", "liam.w@example.com", "+1-555-019-8812", "2026-10-31", "10:00", "10:30", 30, "Invisalign Assessment", "confirmed", "Aligner refinement check"),
+            ("app-demo-3", "doc-marcus", "Dr. Marcus Vance, DDS", "Noah Garcia", "noah.g@example.com", "+1-555-019-7744", "2026-10-31", "09:30", "10:00", 30, "Pediatric Dental Cleaning", "confirmed", "First visit for child"),
+        ]
+        for aid, did, dname, pname, pmail, pphone, adate, astart, aend, adur, aserv, astat, anotes in sample_apps:
+            await conn.execute("""
+                INSERT OR IGNORE INTO appointments (id, tenant_id, doctor_id, doctor_name, patient_name, patient_email, patient_phone, appointment_date, start_time, end_time, duration_mins, service_type, status, notes, created_at)
+                VALUES (?, 'a0000000-0000-0000-0000-000000000001', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (aid, did, dname, pname, pmail, pphone, adate, astart, aend, adur, aserv, astat, anotes, now_iso))
 
         # Seed inventory
         items = [
@@ -233,7 +371,7 @@ async def init_db():
 
         await conn.commit()
         _db_initialized = True
-        logger.info("Database schema and seed initialized successfully.")
+        logger.info("Database schema, doctors, and scheduling engine initialized successfully.")
     finally:
         await conn.close()
 

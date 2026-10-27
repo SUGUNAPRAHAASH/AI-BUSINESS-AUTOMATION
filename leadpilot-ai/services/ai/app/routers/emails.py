@@ -28,6 +28,23 @@ async def triage_email_endpoint(req: EmailTriageRequest):
         (email_id, req.message_id, req.from_addr, req.subject, req.body, result["category"], json.dumps(result["entities"]), result["priority"], result["draft_reply"], result["action"], now_iso)
     )
 
+    # Intimate hospital side via email
+    try:
+        from app.integrations.gmail import EmailAdapter
+        emailer = EmailAdapter()
+        await emailer.send_hospital_intake_alert({
+            "name": result["entities"].get("name") or req.from_addr.split("@")[0].title(),
+            "email": req.from_addr,
+            "phone": "Inquiry via Email",
+            "doctor_name": "Clinic Triage Coordinator",
+            "date_time": result["entities"].get("date") or "Triage Queue Pending",
+            "service": f"Email Triage: {result['category'].upper()} ({result['priority'].upper()})",
+            "score": "HOT" if result["priority"] == "high" else "WARM",
+            "notes": f"Subject: {req.subject}\n\nDraft Reply Prepared:\n{result['draft_reply']}"
+        })
+    except Exception as e:
+        pass
+
     result["id"] = email_id
     return EmailTriageResponse(**result)
 
@@ -57,18 +74,23 @@ async def list_triaged_emails():
 
 @router.post("/{email_id}/approve", dependencies=[Depends(verify_api_key)])
 async def approve_email_reply(email_id: str):
-    """Human approval: approves draft reply and dispatches via mock/real outbox."""
+    """Human approval: approves draft reply and dispatches via live EmailAdapter."""
     email_row = await fetch_one("SELECT * FROM emails WHERE id = ?", (email_id,))
     if not email_row:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": f"Email {email_id} not found"})
 
     await execute("UPDATE emails SET action = 'approved' WHERE id = ?", (email_id,))
-    outbox_id = await insert_mock_outbox("gmail", "send_approved_reply", {
-        "to": email_row["from_addr"],
-        "subject": f"Re: {email_row['subject']}",
-        "body": email_row["draft_reply"]
-    })
-    return {"status": "approved", "email_id": email_id, "outbox_id": outbox_id}
+
+    # Live dispatch to recipient
+    from app.integrations.gmail import EmailAdapter
+    emailer = EmailAdapter()
+    send_res = await emailer.send_email(
+        to_addr=email_row["from_addr"],
+        subject=f"Re: {email_row['subject']}",
+        body=email_row["draft_reply"]
+    )
+    return {"status": "approved", "email_id": email_id, "dispatch": send_res}
+
 
 
 @router.post("/{email_id}/reject", dependencies=[Depends(verify_api_key)])

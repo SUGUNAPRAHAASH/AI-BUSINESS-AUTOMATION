@@ -191,8 +191,8 @@ async def agent_node(state: AgentState) -> Dict[str, Any]:
                     name_m = prior_name_m
                     break
 
-    # Strictly trigger when phone number is provided
-    if phone_m and not lead_captured:
+    # Trigger lead capture when phone number or email is provided
+    if (phone_m or email_m) and not lead_captured:
         budget_m = re.search(r'(?:budget\s*(?:around|of|is)?\s*[\$]?\s*(\d+[\d,]*))|([\$]\s*\d+[\d,]*)', full_text, re.IGNORECASE)
         timeline_m = re.search(r'(?:start|in|within|next)?\s*(next\s*month|next\s*week|soon|immediately|\d+\s*(?:days|weeks|months)|saturday|tomorrow)', full_text, re.IGNORECASE)
         lead_captured = await capture_lead(
@@ -200,7 +200,7 @@ async def agent_node(state: AgentState) -> Dict[str, Any]:
             conversation_id=cid,
             name=name_m.group(1).strip() if name_m else "Valued Patient",
             email=email_m.group(0) if email_m else None,
-            phone=phone_m.group(0),
+            phone=phone_m.group(0) if phone_m else None,
             interest="Teeth Whitening" if "whiten" in full_text else ("Invisalign" if "invisalign" in full_text else "General Appointment"),
             budget_text=budget_m.group(0) if budget_m else None,
             timeline_text=timeline_m.group(0) if timeline_m else ("Saturday at 11:00 AM" if "sat" in full_text else "Upcoming")

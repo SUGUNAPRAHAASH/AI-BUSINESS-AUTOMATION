@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import Sidebar from "@/components/Sidebar";
+import AppShell from "@/components/AppShell";
 
 export const metadata: Metadata = {
-  title: "LeadPilot AI — Virtual Operations Team & Automation Hub",
-  description: "Enterprise-grade AI operations, lead capture, email triage, and document automation.",
+  title: "BrightSmile Health — Clinical Practice & AI Automation Hub",
+  description: "Autonomous virtual operations team, multi-doctor scheduling, and clinical communication.",
 };
 
 export default function RootLayout({
@@ -13,12 +13,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className="flex bg-slate-950 text-slate-100 min-h-screen antialiased selection:bg-teal-500 selection:text-white">
-        <Sidebar />
-        <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-          {children}
-        </main>
+    <html lang="en">
+      <body className="bg-[#f8fafc] text-slate-800 antialiased selection:bg-teal-600 selection:text-white">
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );
